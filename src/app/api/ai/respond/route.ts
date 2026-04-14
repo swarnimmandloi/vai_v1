@@ -1,6 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { SYSTEM_PROMPT, buildUserMessage } from '@/lib/ai/prompts';
-import { AIFrameResponseSchema } from '@/lib/ai/schema';
 import type { AIRequestPayload } from '@/types/ai';
 
 const anthropic = new Anthropic({
@@ -9,7 +8,7 @@ const anthropic = new Anthropic({
 
 export async function POST(req: Request) {
   const body: AIRequestPayload = await req.json();
-  const { question, canvasContext, threadHistory, selectedFrameId, selectedFrameTitle } = body;
+  const { question, canvasContext, threadHistory, selectedFrameTitle } = body;
 
   const userMessage = buildUserMessage({
     question,
@@ -22,13 +21,7 @@ export async function POST(req: Request) {
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 2000,
-      system: [
-        {
-          type: 'text',
-          text: SYSTEM_PROMPT,
-          cache_control: { type: 'ephemeral' },
-        },
-      ],
+      system: SYSTEM_PROMPT,
       messages: [
         {
           role: 'user',
@@ -39,26 +32,34 @@ export async function POST(req: Request) {
 
     const textBlock = response.content.find((b) => b.type === 'text');
     if (!textBlock || textBlock.type !== 'text') {
-      return new Response(JSON.stringify({ error: 'No text response' }), { status: 500 });
+      return Response.json({ error: 'No text in AI response' }, { status: 500 });
     }
 
-    // Extract JSON from the response (handle markdown code fences if present)
+    // Strip markdown code fences if present
     let jsonText = textBlock.text.trim();
     const fenceMatch = jsonText.match(/```(?:json)?\n?([\s\S]*?)\n?```/);
     if (fenceMatch) jsonText = fenceMatch[1].trim();
 
-    // Validate with Zod
-    const parsed = AIFrameResponseSchema.safeParse(JSON.parse(jsonText));
-    if (!parsed.success) {
-      console.error('Schema validation failed:', parsed.error);
-      return new Response(JSON.stringify({ error: 'Invalid AI response format' }), { status: 500 });
+    // Parse JSON
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(jsonText);
+    } catch {
+      console.error('JSON parse failed. Raw text:', jsonText.slice(0, 500));
+      return Response.json({ error: 'AI returned invalid JSON' }, { status: 500 });
     }
 
-    return new Response(JSON.stringify(parsed.data), {
-      headers: { 'Content-Type': 'application/json' },
-    });
-  } catch (err) {
-    console.error('Anthropic API error:', err);
-    return new Response(JSON.stringify({ error: 'AI request failed' }), { status: 500 });
+    // Basic shape check without Zod (avoids Zod v4 compat issues)
+    const data = parsed as Record<string, unknown>;
+    if (!data.chat_summary || !data.frame) {
+      console.error('Missing fields in AI response:', Object.keys(data));
+      return Response.json({ error: 'AI response missing required fields' }, { status: 500 });
+    }
+
+    return Response.json(data);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('AI route error:', message);
+    return Response.json({ error: message }, { status: 500 });
   }
 }

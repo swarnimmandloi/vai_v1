@@ -111,8 +111,9 @@ export function useAIResponse() {
         // Commit AI message to chat
         commitAIMessage(parsed.chat_summary, frameId);
 
-        // Persist to Supabase in background
-        if (canvasId) {
+        // Persist to Supabase in background (skip if not configured / demo mode)
+        const supabaseConfigured = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
+        if (canvasId && supabaseConfigured) {
           persistFrame(frame, canvasId).catch(console.error);
         }
 
@@ -154,6 +155,7 @@ export function useAIResponse() {
 }
 
 async function persistFrame(frame: Frame, canvasId: string) {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) return;
   const supabase = createClient();
 
   const { error: frameError } = await supabase.from('frames').insert({

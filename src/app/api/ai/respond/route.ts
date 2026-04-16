@@ -56,13 +56,76 @@ export async function POST(req: Request) {
       return Response.json({ error: 'AI response missing required fields' }, { status: 500 });
     }
 
-    const frame = data.frame as Record<string, unknown>;
-    console.log('[VAI] Claude response OK — title:', frame.title, '| layout:', frame.layout_type, '| blocks:', Array.isArray(frame.blocks) ? frame.blocks.length : 'NOT AN ARRAY', '| raw blocks:', JSON.stringify(frame.blocks)?.slice(0, 300));
+    // Normalize block structure in case Claude drifts from the schema
+    const normalized = normalizeResponse(data);
 
-    return Response.json(data);
+    const frame = normalized.frame as Record<string, unknown>;
+    console.log('[VAI] Claude response OK — title:', frame.title, '| layout:', frame.layout_type, '| blocks:', Array.isArray(frame.blocks) ? (frame.blocks as unknown[]).length : 'NOT AN ARRAY');
+
+    return Response.json(normalized);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     console.error('AI route error:', message);
     return Response.json({ error: message }, { status: 500 });
   }
+}
+
+// Normalize Claude's response to our expected schema regardless of field name drift
+function normalizeResponse(data: Record<string, unknown>) {
+  const frame = data.frame as Record<string, unknown>;
+  const rawBlocks = (frame.blocks ?? frame.items ?? []) as Record<string, unknown>[];
+
+  const blocks = rawBlocks.map((b) => {
+    // Normalize block_type: accept "type" or "block_type"
+    const blockType = (b.block_type ?? b.type ?? 'icon_text') as string;
+
+    // If content is already a nested object, use it; otherwise build it from flat fields
+    let content = b.content as Record<string, unknown> | undefined;
+    if (!content || typeof content !== 'object') {
+      // Claude returned flat fields — wrap them into content
+      if (blockType === 'icon_text') {
+        content = {
+          icon: b.icon ?? 'Sparkles',
+          heading: b.heading ?? b.title ?? b.name ?? '',
+          body: b.body ?? b.description ?? b.text ?? '',
+        };
+      } else if (blockType === 'list') {
+        const items = (b.items ?? b.steps ?? []) as unknown[];
+        content = {
+          items: items.map((item) =>
+            typeof item === 'string' ? { text: item } : item
+          ),
+        };
+      } else if (blockType === 'stat') {
+        content = {
+          value: b.value ?? '',
+          label: b.label ?? '',
+          trend: b.trend,
+          context: b.context,
+        };
+      } else if (blockType === 'chart') {
+        content = {
+          chart_type: b.chart_type ?? 'bar',
+          data: b.data ?? [],
+        };
+      } else {
+        content = b;
+      }
+    } else {
+      // content exists but might use "title" instead of "heading"
+      if (blockType === 'icon_text' && content.title && !content.heading) {
+        content = { ...content, heading: content.title };
+      }
+    }
+
+    return { block_type: blockType, content };
+  });
+
+  return {
+    ...data,
+    frame: {
+      ...frame,
+      blocks,
+    },
+  };
 }

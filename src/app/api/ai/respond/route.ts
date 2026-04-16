@@ -56,6 +56,9 @@ export async function POST(req: Request) {
       return Response.json({ error: 'AI response missing required fields' }, { status: 500 });
     }
 
+    const frame = data.frame as Record<string, unknown>;
+    console.log('[VAI] Claude response OK — title:', frame.title, '| layout:', frame.layout_type, '| blocks:', Array.isArray(frame.blocks) ? frame.blocks.length : 'NOT AN ARRAY', '| raw blocks:', JSON.stringify(frame.blocks)?.slice(0, 300));
+
     return Response.json(data);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);

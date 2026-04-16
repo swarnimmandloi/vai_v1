@@ -72,6 +72,7 @@ export function useAIResponse() {
 
         // Parse the JSON response
         const parsed: AIFrameResponseType = JSON.parse(fullText);
+        console.log('[VAI] Parsed response — blocks count:', parsed?.frame?.blocks?.length, '| blocks:', JSON.stringify(parsed?.frame?.blocks)?.slice(0, 400));
 
         // Build the frame object
         const frameId = generateId();

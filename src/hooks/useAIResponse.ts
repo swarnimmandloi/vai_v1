@@ -98,7 +98,7 @@ export function useAIResponse() {
           canvas_id: canvasId ?? '',
           title: parsed.frame.title,
           position,
-          width: 380,
+          width: parsed.frame.blocks.some((b) => b.block_type === 'diagram') ? 600 : 380,
           layout_type: parsed.frame.layout_type,
           parent_id: selectedFrameId,
           thread_id: threadId,

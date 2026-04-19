@@ -8,10 +8,12 @@ import { ChartBlock } from './ChartBlock';
 import { ListBlock } from './ListBlock';
 import { StatBlock } from './StatBlock';
 import { NoteBlock } from './NoteBlock';
-import type { IconTextContent, ChartContent, ListContent, StatContent, NoteContent } from '@/types/canvas';
+import { DiagramBlock } from './DiagramBlock';
+import type { IconTextContent, ChartContent, ListContent, StatContent, NoteContent, DiagramContent } from '@/types/canvas';
 
 interface BlockRendererProps {
   block: Block;
+  frameId?: string;
   onDelete?: (blockId: string) => void;
   onUpdateContent?: (blockId: string, content: BlockContent) => void;
   dragHandleProps?: React.HTMLAttributes<HTMLDivElement>;
@@ -19,6 +21,7 @@ interface BlockRendererProps {
 
 export const BlockRenderer = memo(function BlockRenderer({
   block,
+  frameId,
   onDelete,
   onUpdateContent,
   dragHandleProps,
@@ -40,6 +43,8 @@ export const BlockRenderer = memo(function BlockRenderer({
             onUpdate={(c) => onUpdateContent?.(block.id, c)}
           />
         );
+      case 'diagram':
+        return <DiagramBlock content={block.content as DiagramContent} frameId={frameId ?? ''} />;
       default:
         return null;
     }

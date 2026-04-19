@@ -108,6 +108,13 @@ function normalizeResponse(data: Record<string, unknown>) {
           chart_type: b.chart_type ?? 'bar',
           data: b.data ?? [],
         };
+      } else if (blockType === 'diagram') {
+        const rawDef = (b.definition ?? b.code ?? b.mermaid ?? b.diagram ?? '') as string;
+        const definition = rawDef.replace(/\\n/g, '\n');
+        const DIAGRAM_TYPES = ['flowchart', 'sequenceDiagram', 'classDiagram', 'stateDiagram-v2', 'erDiagram'];
+        const inferredType = (b.diagram_type as string | undefined) ??
+          (DIAGRAM_TYPES.find((t) => definition.trimStart().startsWith(t)) ?? 'flowchart');
+        content = { diagram_type: inferredType, definition, caption: b.caption };
       } else {
         content = b;
       }
@@ -115,6 +122,15 @@ function normalizeResponse(data: Record<string, unknown>) {
       // content exists but might use "title" instead of "heading"
       if (blockType === 'icon_text' && content.title && !content.heading) {
         content = { ...content, heading: content.title };
+      }
+      // content exists but definition might be under an alias
+      if (blockType === 'diagram') {
+        const rawDef = ((content.definition ?? content.code ?? content.mermaid ?? '') as string);
+        const definition = rawDef.replace(/\\n/g, '\n');
+        const DIAGRAM_TYPES = ['flowchart', 'sequenceDiagram', 'classDiagram', 'stateDiagram-v2', 'erDiagram'];
+        const inferredType = (content.diagram_type as string | undefined) ??
+          (DIAGRAM_TYPES.find((t) => definition.trimStart().startsWith(t)) ?? 'flowchart');
+        content = { ...content, diagram_type: inferredType, definition };
       }
     }
 

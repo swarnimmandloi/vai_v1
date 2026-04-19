@@ -34,7 +34,15 @@ export type NoteContent = {
   author?: string;
 };
 
-export type BlockType = 'icon_text' | 'chart' | 'list' | 'stat' | 'image' | 'note';
+export type DiagramType = 'flowchart' | 'sequenceDiagram' | 'classDiagram' | 'stateDiagram-v2' | 'erDiagram';
+
+export type DiagramContent = {
+  diagram_type: DiagramType;
+  definition: string;
+  caption?: string;
+};
+
+export type BlockType = 'icon_text' | 'chart' | 'list' | 'stat' | 'image' | 'note' | 'diagram';
 
 export type BlockContent =
   | IconTextContent
@@ -42,7 +50,8 @@ export type BlockContent =
   | ListContent
   | StatContent
   | ImageContent
-  | NoteContent;
+  | NoteContent
+  | DiagramContent;
 
 export interface Block {
   id: string;

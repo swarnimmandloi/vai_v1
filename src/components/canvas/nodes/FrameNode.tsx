@@ -46,6 +46,7 @@ function SortableBlock({ block, frameId }: SortableBlockProps) {
     <div ref={setNodeRef} style={style}>
       <BlockRenderer
         block={block}
+        frameId={frameId}
         onDelete={(id) => removeBlock(frameId, id)}
         onUpdateContent={(id, content) => updateBlockContent(frameId, id, content)}
         dragHandleProps={{ ...attributes, ...listeners }}
@@ -100,7 +101,7 @@ export const FrameNode = memo(function FrameNode({ data, selected, id }: NodePro
   return (
     <div
       className="relative group"
-      style={{ width: frame.width, minWidth: 300, maxWidth: 520 }}
+      style={{ width: frame.width, minWidth: 300, maxWidth: 640 }}
       onClick={() => setSelectedFrame(id)}
     >
       {/* Connection handles */}

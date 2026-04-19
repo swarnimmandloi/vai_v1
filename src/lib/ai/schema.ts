@@ -47,12 +47,22 @@ const ImageBlockSchema = z.object({
   }),
 });
 
+const DiagramBlockSchema = z.object({
+  block_type: z.literal('diagram'),
+  content: z.object({
+    diagram_type: z.enum(['flowchart', 'sequenceDiagram', 'classDiagram', 'stateDiagram-v2', 'erDiagram']),
+    definition: z.string().min(1),
+    caption: z.string().optional(),
+  }),
+});
+
 export const BlockSchema = z.discriminatedUnion('block_type', [
   IconTextBlockSchema,
   ChartBlockSchema,
   ListBlockSchema,
   StatBlockSchema,
   ImageBlockSchema,
+  DiagramBlockSchema,
 ]);
 
 export const AIFrameResponseSchema = z.object({

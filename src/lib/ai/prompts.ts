@@ -50,10 +50,19 @@ stat block:
 chart block:
 {"block_type":"chart","content":{"chart_type":"bar","data":[{"label":"A","value":10},{"label":"B","value":20}]}}
 
+diagram block:
+{"block_type":"diagram","content":{"diagram_type":"flowchart","definition":"flowchart LR\n  A[Start] --> B[Step]\n  B --> C{Decision}\n  C -- Yes --> D[Path A]\n  C -- No --> E[Path B]","caption":"Optional label"}}
+diagram_type: flowchart, sequenceDiagram, classDiagram, stateDiagram-v2, or erDiagram
+definition must be valid Mermaid syntax. Use \\n for newlines in the JSON string.
+
 RULES:
 - Prefer 3-6 blocks per frame
 - Be opinionated — choose the best layout for the content
-- icon_text blocks should be substantive, not just labels`;
+- icon_text blocks should be substantive, not just labels
+- Use diagram blocks for: processes/flows, system architecture, entity relationships, state machines, sequences
+- Prefer diagram over icon_text when content has connections or relationships between components
+- diagram works best as the single block in a "single" layout frame
+- Keep diagrams to 5-12 nodes for readability`;
 
 interface PromptInput {
   question: string;

@@ -12,14 +12,19 @@ import {
   applyEdgeChanges,
   addEdge,
 } from '@xyflow/react';
-import type { Frame, Block, BlockContent } from '@/types/canvas';
+import type { Frame, Block, BlockContent, KnowledgeCard } from '@/types/canvas';
 import { generateId } from '@/lib/utils';
 
 export interface FrameNodeData extends Record<string, unknown> {
   frame: Frame;
 }
 
+export interface CardNodeData extends Record<string, unknown> {
+  card: KnowledgeCard;
+}
+
 export type FrameNode = Node<FrameNodeData, 'frame'>;
+export type CardNode = Node<CardNodeData, 'card'>;
 export type LoadingNode = Node<Record<string, unknown>, 'loading'>;
 
 interface CanvasStore {
@@ -42,6 +47,12 @@ interface CanvasStore {
   updateBlockContent: (frameId: string, blockId: string, content: BlockContent) => void;
   removeBlock: (frameId: string, blockId: string) => void;
   reorderBlocks: (frameId: string, fromIndex: number, toIndex: number) => void;
+
+  addCardGraph: (
+    positionedCards: Array<{ card: KnowledgeCard; position: { x: number; y: number } }>,
+    cardEdges: Array<{ from: string; to: string; label?: string }>,
+    parentNodeId?: string
+  ) => void;
 
   setCanvasId: (id: string) => void;
   loadFrames: (frames: Frame[], connections: { id: string; source_frame_id: string; target_frame_id: string; label?: string }[]) => void;
@@ -168,6 +179,50 @@ export const useCanvasStore = create<CanvasStore>()(
           const [moved] = blocks.splice(fromIndex, 1);
           blocks.splice(toIndex, 0, moved);
           blocks.forEach((b, i) => { b.order_index = i; });
+        }
+      }),
+
+    addCardGraph: (positionedCards, cardEdges, parentNodeId) =>
+      set((s) => {
+        positionedCards.forEach(({ card, position }) => {
+          s.nodes.push({
+            id: card.id,
+            type: 'card',
+            position,
+            data: { card },
+          } as CardNode);
+        });
+
+        const cardIdSet = new Set(positionedCards.map((c) => c.card.id));
+
+        cardEdges
+          .filter(({ from, to }) => cardIdSet.has(from) && cardIdSet.has(to))
+          .forEach(({ from, to, label }) => {
+            s.edges.push({
+              id: generateId(),
+              source: from,
+              target: to,
+              type: 'smoothstep',
+              animated: false,
+              label: label ?? undefined,
+              style: { stroke: '#6366f1', strokeWidth: 1.5 },
+              labelStyle: { fill: '#94a3b8', fontSize: 10, fontWeight: 500 },
+              labelBgStyle: { fill: '#0f172a', fillOpacity: 0.9 },
+              labelBgPadding: [4, 6],
+              labelBgBorderRadius: 4,
+            });
+          });
+
+        // Edge connecting parent node to the first card in this cluster
+        if (parentNodeId && positionedCards.length > 0) {
+          s.edges.push({
+            id: generateId(),
+            source: parentNodeId,
+            target: positionedCards[0].card.id,
+            type: 'smoothstep',
+            animated: true,
+            style: { stroke: '#6366f166', strokeWidth: 1.5, strokeDasharray: '6 4' },
+          });
         }
       }),
 

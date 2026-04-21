@@ -13,10 +13,12 @@ import {
 import { useCanvasStore } from '@/store/canvasStore';
 import { FrameNode } from './nodes/FrameNode';
 import { FrameLoadingNode } from './nodes/FrameLoadingNode';
+import { CardNode } from './nodes/CardNode';
 
 const nodeTypes: NodeTypes = {
   frame: FrameNode as NodeTypes['frame'],
   loading: FrameLoadingNode,
+  card: CardNode as NodeTypes['card'],
 };
 
 interface CanvasViewProps {

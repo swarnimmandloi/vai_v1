@@ -1,45 +1,96 @@
 'use client';
 
 import { useCallback } from 'react';
+import dagre from '@dagrejs/dagre';
 import { useCanvasStore } from '@/store/canvasStore';
 import { useChatStore } from '@/store/chatStore';
 import { useUIStore } from '@/store/uiStore';
 import { useCanvasContext } from './useCanvasContext';
-import type { Frame, Block } from '@/types/canvas';
-import type { AIFrameResponseType } from '@/lib/ai/schema';
+import type { KnowledgeCard } from '@/types/canvas';
 import { generateId } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
 
+const CARD_W = 240;
+const CARD_H = 290; // image(140) + content(~100) + input(~50)
+const H_GAP = 60;
+const V_GAP = 40;
+
+function layoutCards(
+  cards: KnowledgeCard[],
+  connections: Array<{ from: string; to: string }>,
+  offset: { x: number; y: number }
+): Map<string, { x: number; y: number }> {
+  const g = new dagre.graphlib.Graph();
+  g.setGraph({ rankdir: 'LR', nodesep: V_GAP, ranksep: H_GAP, marginx: 0, marginy: 0 });
+  g.setDefaultEdgeLabel(() => ({}));
+
+  const validIds = new Set(cards.map((c) => c.id));
+  cards.forEach((c) => g.setNode(c.id, { width: CARD_W, height: CARD_H }));
+  connections
+    .filter(({ from, to }) => validIds.has(from) && validIds.has(to))
+    .forEach(({ from, to }) => g.setEdge(from, to));
+
+  dagre.layout(g);
+
+  // Collect raw positions and find min for normalization
+  const raw = new Map<string, { x: number; y: number }>();
+  let minX = Infinity;
+  let minY = Infinity;
+  cards.forEach((c) => {
+    const node = g.node(c.id);
+    if (node) {
+      const x = node.x - CARD_W / 2;
+      const y = node.y - CARD_H / 2;
+      raw.set(c.id, { x, y });
+      if (x < minX) minX = x;
+      if (y < minY) minY = y;
+    }
+  });
+
+  const result = new Map<string, { x: number; y: number }>();
+  raw.forEach((pos, id) => {
+    result.set(id, { x: pos.x - minX + offset.x, y: pos.y - minY + offset.y });
+  });
+  return result;
+}
+
 export function useAIResponse() {
   const { getCanvasSummary, getThreadHistory, selectedFrameId } = useCanvasContext();
-  const { addFrame, addLoadingNode, removeLoadingNode, getNextFramePosition, canvasId } = useCanvasStore();
-  const { addUserMessage, setStreaming, setStreamingText, commitAIMessage, clearStreaming } = useChatStore();
+  const {
+    addCardGraph,
+    addLoadingNode,
+    removeLoadingNode,
+    getNextFramePosition,
+    setSelectedFrame,
+    canvasId,
+    nodes,
+  } = useCanvasStore();
+  const { addUserMessage, setStreaming, commitAIMessage, clearStreaming } = useChatStore();
   const { setFirstVisitComplete } = useUIStore();
 
   const submit = useCallback(
     async (question: string) => {
       if (!question.trim()) return;
-
-      // Mark first visit as complete
       setFirstVisitComplete();
-
-      // Add user message to chat
       addUserMessage(question);
 
-      // Generate a temp ID for loading node
       const tempId = `loading-${generateId()}`;
-      const position = getNextFramePosition(selectedFrameId ?? undefined);
-
-      // Show loading node on canvas immediately
-      addLoadingNode(tempId, position);
+      const clusterOffset = getNextFramePosition(selectedFrameId ?? undefined);
+      addLoadingNode(tempId, clusterOffset);
       setStreaming(true, tempId);
 
       // Build context
       const canvasContext = getCanvasSummary();
       const threadHistory = getThreadHistory();
-      const selectedFrameTitle = selectedFrameId
-        ? (useCanvasStore.getState().nodes.find((n) => n.id === selectedFrameId)
-            ?.data as { frame: Frame } | undefined)?.frame?.title ?? null
+
+      // Find heading of selected card/frame for context
+      const selectedNode = selectedFrameId
+        ? nodes.find((n) => n.id === selectedFrameId)
+        : null;
+      const selectedCardHeading = selectedNode
+        ? ((selectedNode.data as { card?: { heading: string } })?.card?.heading ??
+           (selectedNode.data as { frame?: { title: string } })?.frame?.title ??
+           null)
         : null;
 
       try {
@@ -51,17 +102,15 @@ export function useAIResponse() {
             canvasContext,
             threadHistory,
             selectedFrameId,
-            selectedFrameTitle,
+            selectedFrameTitle: selectedCardHeading,
           }),
         });
 
         if (!response.ok) throw new Error(`API error: ${response.status}`);
 
-        // Stream the response text
         const reader = response.body?.getReader();
         const decoder = new TextDecoder();
         let fullText = '';
-
         if (reader) {
           while (true) {
             const { done, value } = await reader.read();
@@ -70,84 +119,69 @@ export function useAIResponse() {
           }
         }
 
-        // Parse the JSON response
-        const parsed: AIFrameResponseType = JSON.parse(fullText);
-        console.log('[VAI] Parsed response — blocks count:', parsed?.frame?.blocks?.length, '| blocks:', JSON.stringify(parsed?.frame?.blocks)?.slice(0, 400));
-
-        // Build the frame object
-        const frameId = generateId();
-        const threadId = selectedFrameId
-          ? (() => {
-              const parentNode = useCanvasStore.getState().nodes.find(
-                (n) => n.id === selectedFrameId
-              );
-              return (parentNode?.data as { frame: Frame } | undefined)?.frame?.thread_id ?? generateId();
-            })()
-          : generateId();
-
-        const blocks: Block[] = parsed.frame.blocks.map((b, i) => ({
-          id: generateId(),
-          frame_id: frameId,
-          block_type: b.block_type,
-          order_index: i,
-          content: b.content as Block['content'],
-        }));
-
-        const frame: Frame = {
-          id: frameId,
-          canvas_id: canvasId ?? '',
-          title: parsed.frame.title,
-          position,
-          width: parsed.frame.blocks.some((b) => b.block_type === 'diagram') ? 600 : 380,
-          layout_type: parsed.frame.layout_type,
-          parent_id: selectedFrameId,
-          thread_id: threadId,
-          blocks,
+        const parsed = JSON.parse(fullText) as {
+          chat_summary: string;
+          cards: KnowledgeCard[];
+          connections: Array<{ from: string; to: string; label?: string }>;
         };
 
-        // Remove loading node, add real frame
+        console.log('[VAI] Card graph — cards:', parsed.cards?.length, '| connections:', parsed.connections?.length);
+
+        // Run dagre layout
+        const positions = layoutCards(parsed.cards, parsed.connections ?? [], clusterOffset);
+
+        const positionedCards = parsed.cards.map((card) => ({
+          card,
+          position: positions.get(card.id) ?? clusterOffset,
+        }));
+
         removeLoadingNode(tempId);
-        addFrame(frame, selectedFrameId ?? undefined);
 
-        // Commit AI message to chat
-        commitAIMessage(parsed.chat_summary, frameId);
+        // Add cards + edges to canvas
+        addCardGraph(positionedCards, parsed.connections ?? [], selectedFrameId ?? undefined);
 
-        // Persist to Supabase in background (skip if not configured / demo mode)
-        const supabaseConfigured = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
-        if (canvasId && supabaseConfigured) {
-          persistFrame(frame, canvasId).catch(console.error);
+        // Select the first card
+        if (parsed.cards.length > 0) {
+          setSelectedFrame(parsed.cards[0].id);
         }
 
-        // Notify canvas to focus new frame
+        // Commit chat message
+        commitAIMessage(parsed.chat_summary, parsed.cards[0]?.id ?? '');
+
+        // Persist to Supabase (skip in demo mode)
+        const supabaseConfigured = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
+        if (canvasId && canvasId !== 'demo' && supabaseConfigured) {
+          persistCards(parsed.cards, positionedCards, canvasId).catch(console.error);
+        }
+
+        // Focus first card
         setTimeout(() => {
           window.dispatchEvent(
-            new CustomEvent('vai:focus-frame', { detail: { frameId } })
+            new CustomEvent('vai:focus-frame', { detail: { frameId: parsed.cards[0]?.id } })
           );
         }, 100);
       } catch (err) {
         console.error('AI response error:', err);
         removeLoadingNode(tempId);
         clearStreaming();
-        commitAIMessage(
-          'Something went wrong. Please try again.',
-          ''
-        );
+        commitAIMessage('Something went wrong. Please try again.', '');
       }
     },
     [
       selectedFrameId,
       canvasId,
+      nodes,
       getCanvasSummary,
       getThreadHistory,
       addUserMessage,
       setStreaming,
-      setStreamingText,
       commitAIMessage,
       clearStreaming,
-      addFrame,
+      addCardGraph,
       addLoadingNode,
       removeLoadingNode,
       getNextFramePosition,
+      setSelectedFrame,
       setFirstVisitComplete,
     ]
   );
@@ -155,36 +189,27 @@ export function useAIResponse() {
   return { submit };
 }
 
-async function persistFrame(frame: Frame, canvasId: string) {
+async function persistCards(
+  cards: KnowledgeCard[],
+  positionedCards: Array<{ card: KnowledgeCard; position: { x: number; y: number } }>,
+  canvasId: string
+) {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL) return;
   const supabase = createClient();
 
-  const { error: frameError } = await supabase.from('frames').insert({
-    id: frame.id,
-    canvas_id: canvasId,
-    title: frame.title,
-    position_x: frame.position.x,
-    position_y: frame.position.y,
-    width: frame.width,
-    layout_type: frame.layout_type,
-    parent_id: frame.parent_id,
-    thread_id: frame.thread_id,
-  });
+  const posMap = new Map(positionedCards.map((p) => [p.card.id, p.position]));
 
-  if (frameError) {
-    console.error('Failed to persist frame:', frameError);
-    return;
-  }
-
-  if (frame.blocks.length > 0) {
-    await supabase.from('blocks').insert(
-      frame.blocks.map((b) => ({
-        id: b.id,
-        frame_id: frame.id,
-        block_type: b.block_type,
-        order_index: b.order_index,
-        content: b.content,
-      }))
-    );
-  }
+  await supabase.from('frames').insert(
+    cards.map((c) => ({
+      id: c.id,
+      canvas_id: canvasId,
+      title: c.heading,
+      position_x: posMap.get(c.id)?.x ?? 0,
+      position_y: posMap.get(c.id)?.y ?? 0,
+      width: CARD_W,
+      layout_type: 'single',
+      parent_id: null,
+      thread_id: generateId(),
+    }))
+  );
 }

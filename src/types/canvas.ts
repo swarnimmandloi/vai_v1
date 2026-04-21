@@ -1,3 +1,10 @@
+// Knowledge card — the new canvas primitive
+export type KnowledgeCard = {
+  id: string;
+  heading: string;
+  body: string;
+};
+
 // Block content payloads
 export type IconTextContent = {
   icon: string;

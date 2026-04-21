@@ -38,7 +38,9 @@ Examples of good connection patterns:
 - "how TCP works" → linear chain: SYN → SYN-ACK → ACK → Data Transfer → FIN
 - "human brain" → hub: Brain Stem → Limbic System → Cortex, each with lateral connections
 - "React vs Vue" → two parallel tracks with bridge cards for shared concepts
-- "photosynthesis" → two parallel tracks (light + dark reactions) that merge`;
+- "photosynthesis" → two parallel tracks (light + dark reactions) that merge
+
+When a canvas screenshot is provided, use it to understand what topics are already on the canvas — extend existing clusters, avoid repeating covered concepts, and complement what's visible.`;
 
 interface PromptInput {
   question: string;

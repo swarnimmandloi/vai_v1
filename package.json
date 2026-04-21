@@ -19,6 +19,7 @@
     "ai": "^6.0.159",
     "clsx": "^2.1.1",
     "framer-motion": "^12.38.0",
+    "html-to-image": "^1.11.13",
     "immer": "^11.1.4",
     "lucide-react": "^1.8.0",
     "mermaid": "^11.14.0",

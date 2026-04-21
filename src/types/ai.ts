@@ -34,6 +34,7 @@ export interface AIRequestPayload {
   threadHistory: ThreadHistoryItem[];
   selectedFrameId: string | null;
   selectedFrameTitle: string | null;
+  canvasSnapshot?: string;
 }
 
 export interface ChatMessage {

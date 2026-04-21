@@ -8,7 +8,7 @@ const anthropic = new Anthropic({
 
 export async function POST(req: Request) {
   const body: AIRequestPayload = await req.json();
-  const { question, canvasContext, threadHistory, selectedFrameTitle } = body;
+  const { question, canvasContext, threadHistory, selectedFrameTitle, canvasSnapshot } = body;
 
   const userMessage = buildUserMessage({
     question,
@@ -17,12 +17,27 @@ export async function POST(req: Request) {
     selectedCardHeading: selectedFrameTitle,
   });
 
+  type MessageContent = Anthropic.MessageParam['content'];
+  const messageContent: MessageContent = canvasSnapshot
+    ? [
+        {
+          type: 'image',
+          source: {
+            type: 'base64',
+            media_type: 'image/jpeg',
+            data: canvasSnapshot,
+          },
+        },
+        { type: 'text', text: userMessage },
+      ]
+    : userMessage;
+
   try {
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 4000,
       system: SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: userMessage }],
+      messages: [{ role: 'user', content: messageContent }],
     });
 
     const textBlock = response.content.find((b) => b.type === 'text');

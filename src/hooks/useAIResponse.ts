@@ -9,6 +9,7 @@ import { useCanvasContext } from './useCanvasContext';
 import type { KnowledgeCard } from '@/types/canvas';
 import { generateId } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
+import { captureCanvas } from '@/lib/canvas/captureCanvas';
 
 const CARD_W = 240;
 const CARD_H = 290; // image(140) + content(~100) + input(~50)
@@ -93,6 +94,9 @@ export function useAIResponse() {
            null)
         : null;
 
+      // Capture canvas screenshot for AI context
+      const canvasSnapshot = await captureCanvas();
+
       try {
         const response = await fetch('/api/ai/respond', {
           method: 'POST',
@@ -103,6 +107,7 @@ export function useAIResponse() {
             threadHistory,
             selectedFrameId,
             selectedFrameTitle: selectedCardHeading,
+            canvasSnapshot,
           }),
         });
 

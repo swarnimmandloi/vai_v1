@@ -2,6 +2,7 @@
 
 import { memo, useState } from 'react';
 import { Handle, Position, type NodeProps, type Node } from '@xyflow/react';
+import ReactMarkdown from 'react-markdown';
 import type { CardNodeData } from '@/store/canvasStore';
 import { useCanvasStore } from '@/store/canvasStore';
 
@@ -30,6 +31,7 @@ export const CardNode = memo(function CardNode({
   const [imgError, setImgError] = useState(false);
   const setSelectedFrame = useCanvasStore((s) => s.setSelectedFrame);
 
+  const showImage = card.has_image !== false;
   const imageUrl = `https://picsum.photos/seed/${stableHash(card.heading)}/240/140`;
 
   function handleFollowUp(e: React.FormEvent) {
@@ -64,7 +66,7 @@ export const CardNode = memo(function CardNode({
         }}
       >
         {/* Image */}
-        {!imgError && (
+        {showImage && !imgError && (
           <div
             style={{
               height: 140,
@@ -98,9 +100,26 @@ export const CardNode = memo(function CardNode({
           >
             {card.heading}
           </h3>
-          <p className="text-xs leading-relaxed" style={{ color: 'var(--muted-fg)' }}>
-            {card.body}
-          </p>
+          <div
+            className="text-xs leading-relaxed card-body-md"
+            style={{ color: 'var(--muted-fg)' }}
+          >
+            <ReactMarkdown
+              components={{
+                p: ({ children }) => <p style={{ margin: '0 0 4px' }}>{children}</p>,
+                strong: ({ children }) => (
+                  <strong style={{ color: 'var(--foreground)', fontWeight: 600 }}>{children}</strong>
+                ),
+                em: ({ children }) => <em style={{ opacity: 0.8 }}>{children}</em>,
+                ul: ({ children }) => (
+                  <ul style={{ margin: '4px 0', paddingLeft: 14, listStyleType: 'disc' }}>{children}</ul>
+                ),
+                li: ({ children }) => <li style={{ marginBottom: 2 }}>{children}</li>,
+              }}
+            >
+              {card.body}
+            </ReactMarkdown>
+          </div>
         </div>
 
         {/* Follow-up input */}

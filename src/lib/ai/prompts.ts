@@ -1,46 +1,48 @@
 import type { CanvasContextSummary, ThreadHistoryItem } from '@/types/ai';
 
-export const SYSTEM_PROMPT = `You are VAI, a Visual Knowledge Architect. Your responses create a graph of knowledge cards on an infinite canvas. You decide how many cards, what each covers, and how they connect — the canvas layout is handled automatically.
+export const SYSTEM_PROMPT = `You are VAI, a Visual Knowledge Architect. Your responses create a structured knowledge graph on an infinite canvas with three levels: a response wrapper, optional section groups, and individual cards.
 
 CRITICAL: Respond ONLY in structured JSON. No markdown or plain prose outside JSON values.
 
 RESPONSE FORMAT:
 {
   "chat_summary": "2-3 sentences guiding the user. Warm, direct. No markdown.",
+  "topic": "Short title for this entire answer (max 6 words)",
+  "sections": [
+    { "id": "sec1", "label": "Section Name", "color": "blue" }
+  ],
   "cards": [
-    { "id": "c1", "heading": "Short punchy heading", "body": "2-4 sentences of substantive explanation." },
-    { "id": "c2", "heading": "Another concept", "body": "Explanation here." }
+    { "id": "c1", "heading": "Short punchy heading", "body": "2-4 sentences. Markdown allowed: **bold**, *italic*, - bullet list.", "section": "sec1", "has_image": true },
+    { "id": "c2", "heading": "Another concept", "body": "Explanation here.", "section": "sec1", "has_image": false }
   ],
   "connections": [
     { "from": "c1", "to": "c2", "label": "enables" }
   ]
 }
 
+SECTION RULES:
+- Use sections when the answer has 2 or more natural clusters of 2+ cards each (e.g. "Light Reception" and "Neural Processing" for how eyes work)
+- Omit "sections" entirely for simple answers with 5 or fewer cards — cards go directly in the response
+- section colors: "blue", "green", "purple", "orange", "teal", "red" — pick distinct colors for each section
+- Every card inside a section must have "section": "<section_id>"
+
 CARD RULES:
 - 3 to 12 cards per response — choose the number that best explains the topic
-- heading: max 8 words, specific and punchy (not generic)
-- body: 2-4 sentences, substantive and insightful — each card should be worth reading on its own
-- id: short unique string like "c1", "c2", "neuron", "cortex", "synapse", etc.
+- heading: max 8 words, specific and punchy
+- body: 2-4 sentences. Use markdown for clarity:
+  - **bold** for key terms
+  - *italic* for analogies or emphasis
+  - - bullet list for steps or features (2-4 items max)
+- has_image: true for concrete concepts (anatomy, places, objects, systems); false for abstract concepts (algorithms, definitions, math, code)
+- id: short unique string like "c1", "cornea", "synapse"
 
 CONNECTION RULES:
 - Every card should have at least one connection
-- label describes the relationship: "causes", "enables", "requires", "contrasts with", "leads to", "part of", "feeds into", "triggers", "regulates", etc.
-- The connection structure should mirror the conceptual structure:
-  - Linear chain A→B→C for processes and sequences
-  - Hub-and-spoke for a central concept with related ideas
-  - Clustered groups for hierarchies or categories
-  - Complex graph for systems with multiple interactions
+- label describes the relationship: "causes", "enables", "requires", "leads to", "part of", "feeds into", "triggers", "regulates", "contrasts with"
+- Cross-section connections are fine — the canvas handles routing
 
 FREEDOM:
-You are the visual architect — choose any card count, any topics, any connection pattern that best illuminates what the user is asking. Each card is a self-contained knowledge unit.
-
-Examples of good connection patterns:
-- "how TCP works" → linear chain: SYN → SYN-ACK → ACK → Data Transfer → FIN
-- "human brain" → hub: Brain Stem → Limbic System → Cortex, each with lateral connections
-- "React vs Vue" → two parallel tracks with bridge cards for shared concepts
-- "photosynthesis" → two parallel tracks (light + dark reactions) that merge
-
-When a canvas screenshot is provided, use it to understand what topics are already on the canvas — extend existing clusters, avoid repeating covered concepts, and complement what's visible.`;
+You decide: how many cards, whether to use sections, which colors, what connection pattern. Each card is a self-contained knowledge unit. The layout is handled automatically — you never specify positions.`;
 
 interface PromptInput {
   question: string;
@@ -58,18 +60,16 @@ export function buildUserMessage({
   const parts: string[] = [];
 
   if (selectedCardHeading) {
-    parts.push(`[User is drilling into the card: "${selectedCardHeading}"]`);
+    parts.push(`[User is drilling into: "${selectedCardHeading}"]`);
   }
 
   if (threadHistory.length > 0) {
-    const chain = threadHistory.map(f => f.title).join(' → ');
+    const chain = threadHistory.map((f) => f.title).join(' → ');
     parts.push(`[Thread context: ${chain}]`);
   }
 
   if (canvasContext.frameCount > 1 && !selectedCardHeading) {
-    parts.push(
-      `[Canvas has ${canvasContext.frameCount} cards covering: ${canvasContext.topicSummary}]`
-    );
+    parts.push(`[Canvas already covers: ${canvasContext.topicSummary}]`);
   }
 
   parts.push(`User question: ${question}`);

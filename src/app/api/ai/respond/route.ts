@@ -1,10 +1,13 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { SYSTEM_PROMPT, buildUserMessage } from '@/lib/ai/prompts';
 import type { AIRequestPayload } from '@/types/ai';
+import type { SectionColor } from '@/types/canvas';
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
+
+const VALID_COLORS: SectionColor[] = ['blue', 'green', 'purple', 'orange', 'teal', 'red'];
 
 export async function POST(req: Request) {
   const body: AIRequestPayload = await req.json();
@@ -62,10 +65,13 @@ export async function POST(req: Request) {
       return Response.json({ error: 'AI response missing chat_summary' }, { status: 500 });
     }
 
-    // Card-graph format (new)
     if (Array.isArray(data.cards)) {
       const normalized = normalizeCardGraph(data);
-      console.log('[VAI] Card graph — cards:', normalized.cards.length, '| connections:', normalized.connections.length);
+      console.log(
+        '[VAI] Response — cards:', normalized.cards.length,
+        '| sections:', normalized.sections.length,
+        '| connections:', normalized.connections.length
+      );
       return Response.json(normalized);
     }
 
@@ -78,17 +84,31 @@ export async function POST(req: Request) {
 }
 
 function normalizeCardGraph(data: Record<string, unknown>) {
-  const rawCards = (data.cards ?? []) as Record<string, unknown>[];
-  const rawConnections = (data.connections ?? data.edges ?? []) as Record<string, unknown>[];
+  const topic = String(data.topic ?? data.title ?? data.heading ?? 'Response');
 
+  const rawSections = (data.sections ?? []) as Record<string, unknown>[];
+  const sections = rawSections.map((s, i) => ({
+    id: String(s.id ?? `sec_${i}`),
+    label: String(s.label ?? s.title ?? s.name ?? ''),
+    color: (VALID_COLORS.includes(s.color as SectionColor)
+      ? s.color
+      : VALID_COLORS[i % VALID_COLORS.length]) as SectionColor,
+  }));
+
+  const sectionIds = new Set(sections.map((s) => s.id));
+
+  const rawCards = (data.cards ?? []) as Record<string, unknown>[];
   const cards = rawCards.map((c, i) => ({
     id: String(c.id ?? `card_${i}`),
     heading: String(c.heading ?? c.title ?? c.name ?? ''),
     body: String(c.body ?? c.description ?? c.text ?? c.content ?? ''),
+    section: c.section && sectionIds.has(String(c.section)) ? String(c.section) : undefined,
+    has_image: c.has_image !== false,
   }));
 
   const cardIds = new Set(cards.map((c) => c.id));
 
+  const rawConnections = (data.connections ?? data.edges ?? []) as Record<string, unknown>[];
   const connections = rawConnections
     .map((conn) => ({
       from: String(conn.from ?? conn.source ?? ''),
@@ -99,6 +119,8 @@ function normalizeCardGraph(data: Record<string, unknown>) {
 
   return {
     chat_summary: String(data.chat_summary),
+    topic,
+    sections,
     cards,
     connections,
   };

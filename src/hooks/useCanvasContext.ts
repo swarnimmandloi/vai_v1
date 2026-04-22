@@ -2,7 +2,7 @@
 
 import { useCanvasStore } from '@/store/canvasStore';
 import type { CanvasContextSummary, ThreadHistoryItem } from '@/types/ai';
-import type { FrameNodeData, CardNodeData } from '@/store/canvasStore';
+import type { FrameNodeData, CardNodeData, ResponseNodeData } from '@/store/canvasStore';
 
 export function useCanvasContext() {
   const nodes = useCanvasStore((s) => s.nodes);
@@ -12,10 +12,12 @@ export function useCanvasContext() {
   function getCanvasSummary(): CanvasContextSummary {
     const frameNodes = nodes.filter((n) => n.type === 'frame');
     const cardNodes = nodes.filter((n) => n.type === 'card');
+    const responseNodes = nodes.filter((n) => n.type === 'response');
 
     const frameTitles = frameNodes.map((n) => (n.data as FrameNodeData).frame.title);
     const cardHeadings = cardNodes.map((n) => (n.data as CardNodeData).card.heading);
-    const allTitles = [...frameTitles, ...cardHeadings];
+    const responseTopics = responseNodes.map((n) => (n.data as ResponseNodeData).topic);
+    const allTitles = [...responseTopics, ...frameTitles, ...cardHeadings];
 
     return {
       frameCount: allTitles.length,
@@ -30,40 +32,47 @@ export function useCanvasContext() {
     const selectedNode = nodes.find((n) => n.id === selectedFrameId);
     if (!selectedNode) return [];
 
-    // For card nodes: walk up the edge graph (target → source)
-    if (selectedNode.type === 'card') {
-      const chain: string[] = [selectedFrameId];
-      let current = selectedFrameId;
-      let safety = 0;
+    // Response node: return topic + headings of cards within it
+    if (selectedNode.type === 'response') {
+      const topic = (selectedNode.data as ResponseNodeData).topic;
+      const childCards = nodes.filter(
+        (n) => n.type === 'card' && (n.parentId === selectedFrameId || (() => {
+          // cards whose section is a child of this response
+          const parent = nodes.find((p) => p.id === n.parentId);
+          return parent?.parentId === selectedFrameId;
+        })())
+      );
+      return [{
+        id: selectedFrameId,
+        title: topic,
+        blockHeadings: childCards.slice(0, 5).map((n) => (n.data as CardNodeData).card.heading),
+      }];
+    }
 
-      while (safety < 8) {
-        const parentEdge = edges.find((e) => e.target === current);
-        if (!parentEdge) break;
-        chain.unshift(parentEdge.source);
-        current = parentEdge.source;
-        safety++;
+    // Card node: walk up parentId chain to find the response, then use edge graph for response chain
+    if (selectedNode.type === 'card') {
+      const card = (selectedNode.data as CardNodeData).card;
+
+      // Find response ancestor
+      let responseId: string | null = null;
+      const directParent = nodes.find((n) => n.id === selectedNode.parentId);
+      if (directParent?.type === 'response') {
+        responseId = directParent.id;
+      } else if (directParent?.parentId) {
+        const grandParent = nodes.find((n) => n.id === directParent.parentId);
+        if (grandParent?.type === 'response') responseId = grandParent.id;
       }
 
-      return chain.map((nodeId) => {
-        const node = nodes.find((n) => n.id === nodeId);
-        if (!node) return null;
-        if (node.type === 'card') {
-          const card = (node.data as CardNodeData).card;
-          return { id: nodeId, title: card.heading, blockHeadings: [card.heading] };
-        }
-        if (node.type === 'frame') {
-          const frame = (node.data as FrameNodeData).frame;
-          return {
-            id: nodeId,
-            title: frame.title,
-            blockHeadings: frame.blocks
-              .filter((b) => b.block_type === 'icon_text')
-              .map((b) => (b.content as { heading: string }).heading)
-              .slice(0, 5),
-          };
-        }
-        return null;
-      }).filter(Boolean) as ThreadHistoryItem[];
+      const items: ThreadHistoryItem[] = [
+        { id: selectedFrameId, title: card.heading, blockHeadings: [card.heading] },
+      ];
+
+      if (responseId) {
+        const responseTopic = (nodes.find((n) => n.id === responseId)?.data as ResponseNodeData)?.topic ?? '';
+        items.unshift({ id: responseId, title: responseTopic, blockHeadings: [] });
+      }
+
+      return items;
     }
 
     // Legacy frame path

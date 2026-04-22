@@ -14,11 +14,15 @@ import { useCanvasStore } from '@/store/canvasStore';
 import { FrameNode } from './nodes/FrameNode';
 import { FrameLoadingNode } from './nodes/FrameLoadingNode';
 import { CardNode } from './nodes/CardNode';
+import { SectionNode } from './nodes/SectionNode';
+import { ResponseNode } from './nodes/ResponseNode';
 
 const nodeTypes: NodeTypes = {
   frame: FrameNode as NodeTypes['frame'],
   loading: FrameLoadingNode,
   card: CardNode as NodeTypes['card'],
+  section: SectionNode as NodeTypes['section'],
+  response: ResponseNode as NodeTypes['response'],
 };
 
 interface CanvasViewProps {

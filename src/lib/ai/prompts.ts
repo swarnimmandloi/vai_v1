@@ -37,9 +37,11 @@ CARD RULES:
 - id: short unique string like "c1", "cornea", "synapse"
 
 CONNECTION RULES:
-- Every card should have at least one connection
-- label describes the relationship: "causes", "enables", "requires", "leads to", "part of", "feeds into", "triggers", "regulates", "contrasts with"
-- Cross-section connections are fine — the canvas handles routing
+- Connect cards that have a direct dependency, causal, or sequential relationship
+- Prefer connections WITHIN a section — aim for a clean chain or hub pattern inside each section
+- Cross-section connections: maximum 2 total for the whole response, only for the most essential relationships
+- Do NOT connect every card — sparse is better than dense; a card with no connection is fine if it stands alone
+- label: "causes", "enables", "requires", "leads to", "part of", "feeds into", "triggers", "regulates", "contrasts with"
 
 FREEDOM:
 You decide: how many cards, whether to use sections, which colors, what connection pattern. Each card is a self-contained knowledge unit. The layout is handled automatically — you never specify positions.`;

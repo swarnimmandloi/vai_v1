@@ -89,6 +89,13 @@ interface CanvasStore {
   loadFrames: (frames: Frame[], connections: { id: string; source_frame_id: string; target_frame_id: string; label?: string }[]) => void;
   clearCanvas: () => void;
   getNextFramePosition: (parentId?: string) => { x: number; y: number };
+
+  applyRelayout: (updates: Array<{
+    id: string;
+    position?: { x: number; y: number };
+    style?: Record<string, unknown>;
+    parentId?: string;
+  }>) => void;
 }
 
 export const useCanvasStore = create<CanvasStore>()(
@@ -341,6 +348,17 @@ export const useCanvasStore = create<CanvasStore>()(
             zIndex: 5,
           });
         }
+      }),
+
+    applyRelayout: (updates) =>
+      set((s) => {
+        updates.forEach(({ id, position, style, parentId }) => {
+          const node = s.nodes.find((n) => n.id === id);
+          if (!node) return;
+          if (position) node.position = position;
+          if (style) node.style = { ...node.style, ...style };
+          if (parentId !== undefined) node.parentId = parentId;
+        });
       }),
 
     setCanvasId: (id) => set((s) => { s.canvasId = id; }),

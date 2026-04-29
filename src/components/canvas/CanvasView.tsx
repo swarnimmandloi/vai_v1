@@ -36,10 +36,10 @@ export function CanvasView({ canvasId }: CanvasViewProps) {
   const {
     nodes, edges,
     onNodesChange, onEdgesChange, onConnect,
-    setSelectedFrame, setCanvasId,
+    setSelectedFrame, setCanvasId, applyRelayout,
   } = useCanvasStore();
 
-  const { fitView, getNodes, setNodes, getEdges } = useReactFlow();
+  const { fitView, getNodes, getEdges } = useReactFlow();
   const nodesInitialized = useNodesInitialized();
   const relaidOutRef = useRef(new Set<string>());
 
@@ -47,23 +47,26 @@ export function CanvasView({ canvasId }: CanvasViewProps) {
     setCanvasId(canvasId);
   }, [canvasId, setCanvasId]);
 
-  // Post-render re-layout: re-run dagre with actual measured card heights
+  // Post-render re-layout: re-run dagre with actual measured card heights.
+  // We write back into the Zustand store (applyRelayout) so positions persist
+  // across renders — calling React Flow's setNodes() doesn't work in controlled mode.
   useEffect(() => {
     if (!nodesInitialized) return;
 
     const allNodes = getNodes();
     const allEdges = getEdges();
 
-    // Only process response nodes not yet re-laid out
     const newResponses = allNodes.filter(
       (n) => n.type === 'response' && !relaidOutRef.current.has(n.id)
     );
     if (newResponses.length === 0) return;
 
-    const nodeMap = new Map(allNodes.map((n) => [n.id, n]));
-    let didUpdate = false;
-    const updatedNodes = allNodes.map((n) => ({ ...n }));
-    const updatedMap = new Map(updatedNodes.map((n) => [n.id, n]));
+    const updates: Array<{
+      id: string;
+      position?: { x: number; y: number };
+      style?: Record<string, unknown>;
+      parentId?: string;
+    }> = [];
 
     newResponses.forEach((responseNode) => {
       relaidOutRef.current.add(responseNode.id);
@@ -78,26 +81,13 @@ export function CanvasView({ canvasId }: CanvasViewProps) {
           (n.parentId === responseNode.id || sectionIdSet.has(n.parentId ?? ''))
       );
 
-      // Build measured heights from React Flow's measured property
+      // Collect actual measured heights — skip this response if not yet measured
       const measuredHeights = new Map<string, number>();
       cardNodes.forEach((n) => {
         if (n.measured?.height) measuredHeights.set(n.id, n.measured.height);
       });
+      if (measuredHeights.size < cardNodes.length) return;
 
-      // Skip re-layout if no measurements available yet
-      if (measuredHeights.size === 0) return;
-
-      // Check if any card differs from estimate by more than 24px
-      const needsRelayout = cardNodes.some((n) => {
-        const measured = measuredHeights.get(n.id);
-        if (!measured) return false;
-        const card = (n.data as CardNodeData).card;
-        const estimated = card.has_image !== false ? 340 : 210;
-        return Math.abs(measured - estimated) > 24;
-      });
-      if (!needsRelayout) return;
-
-      // Reconstruct cards, sections, connections for this response
       const cards = cardNodes.map((n) => (n.data as CardNodeData).card);
       const sections = sectionNodes.map((n) => (n.data as SectionNodeData).section);
       const cardIdSet = new Set(cardNodes.map((n) => n.id));
@@ -112,33 +102,22 @@ export function CanvasView({ canvasId }: CanvasViewProps) {
       const { positionedSections, positionedCards, responseWidth, responseHeight } =
         layoutHierarchy(responseNode.id, sections, cards, connections, measuredHeights);
 
-      // Apply updates
-      const rn = updatedMap.get(responseNode.id);
-      if (rn) {
-        rn.style = { ...rn.style, width: responseWidth, height: responseHeight };
-        didUpdate = true;
-      }
+      updates.push({
+        id: responseNode.id,
+        style: { width: responseWidth, height: responseHeight },
+      });
 
       positionedSections.forEach(({ section, position, width, height }) => {
-        const sn = updatedMap.get(section.id);
-        if (sn) {
-          sn.position = position;
-          sn.style = { ...sn.style, width, height };
-          didUpdate = true;
-        }
+        updates.push({ id: section.id, position, style: { width, height } });
       });
 
       positionedCards.forEach(({ card, position, parentId }) => {
-        const cn = updatedMap.get(card.id);
-        if (cn) {
-          cn.position = position;
-          cn.parentId = parentId;
-          didUpdate = true;
-        }
+        updates.push({ id: card.id, position, parentId });
       });
     });
 
-    if (didUpdate) setNodes(updatedNodes);
+    if (updates.length > 0) applyRelayout(updates);
+  // getNodes/getEdges/applyRelayout are stable refs — safe to omit
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodesInitialized]);
 

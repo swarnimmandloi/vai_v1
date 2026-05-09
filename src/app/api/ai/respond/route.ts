@@ -52,6 +52,8 @@ export async function POST(req: Request) {
     const fenceMatch = jsonText.match(/```(?:json)?\n?([\s\S]*?)\n?```/);
     if (fenceMatch) jsonText = fenceMatch[1].trim();
 
+    console.log('[VAI] raw AI response:\n', jsonText);
+
     let parsed: unknown;
     try {
       parsed = JSON.parse(jsonText);

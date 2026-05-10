@@ -38,7 +38,7 @@ export async function POST(req: Request) {
   try {
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-6',
-      max_tokens: 4000,
+      max_tokens: 8192,
       system: SYSTEM_PROMPT,
       messages: [{ role: 'user', content: messageContent }],
     });
@@ -50,7 +50,16 @@ export async function POST(req: Request) {
 
     let jsonText = textBlock.text.trim();
     const fenceMatch = jsonText.match(/```(?:json)?\n?([\s\S]*?)\n?```/);
-    if (fenceMatch) jsonText = fenceMatch[1].trim();
+    if (fenceMatch) {
+      jsonText = fenceMatch[1].trim();
+    } else {
+      jsonText = jsonText.replace(/^```(?:json)?\s*/i, '').trim();
+      const braceStart = jsonText.indexOf('{');
+      const braceEnd = jsonText.lastIndexOf('}');
+      if (braceStart !== -1 && braceEnd > braceStart) {
+        jsonText = jsonText.slice(braceStart, braceEnd + 1);
+      }
+    }
 
     console.log('[VAI] raw AI response:\n', jsonText);
 

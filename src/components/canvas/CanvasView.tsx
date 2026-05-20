@@ -99,8 +99,9 @@ export function CanvasView({ canvasId }: CanvasViewProps) {
           label: typeof e.label === 'string' ? e.label : undefined,
         }));
 
+      const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
       const { positionedSections, positionedCards, responseWidth, responseHeight } =
-        layoutHierarchy(responseNode.id, sections, cards, connections, measuredHeights);
+        layoutHierarchy(responseNode.id, sections, cards, connections, measuredHeights, isMobile ? 'TB' : 'LR');
 
       updates.push({
         id: responseNode.id,
@@ -147,8 +148,9 @@ export function CanvasView({ canvasId }: CanvasViewProps) {
         onPaneClick={handlePaneClick}
         fitView
         fitViewOptions={{ padding: 0.3 }}
-        minZoom={0.1}
+        minZoom={0.05}
         maxZoom={2}
+        zoomOnDoubleClick={false}
         deleteKeyCode="Delete"
         proOptions={{ hideAttribution: true }}
       >

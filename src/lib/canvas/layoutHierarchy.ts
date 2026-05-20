@@ -41,7 +41,8 @@ export function layoutHierarchy(
   sections: KnowledgeSection[],
   cards: KnowledgeCard[],
   connections: Array<{ from: string; to: string; label?: string }>,
-  measuredHeights?: Map<string, number>
+  measuredHeights?: Map<string, number>,
+  rankdir: 'LR' | 'TB' = 'LR'
 ): LayoutResult {
   function cardH(card: KnowledgeCard): number {
     return measuredHeights?.get(card.id) ?? estimatedCardHeight(card);
@@ -65,7 +66,7 @@ export function layoutHierarchy(
     }
 
     const g = new dagre.graphlib.Graph();
-    g.setGraph({ rankdir: 'LR', nodesep: V_GAP, ranksep: H_GAP, marginx: 0, marginy: 0 });
+    g.setGraph({ rankdir, nodesep: V_GAP, ranksep: H_GAP, marginx: 0, marginy: 0 });
     g.setDefaultEdgeLabel(() => ({}));
 
     const validIds = new Set(sectionCards.map((c) => c.id));
@@ -117,7 +118,7 @@ export function layoutHierarchy(
 
   if (ungroupedCards.length > 0) {
     const g = new dagre.graphlib.Graph();
-    g.setGraph({ rankdir: 'LR', nodesep: V_GAP, ranksep: H_GAP, marginx: 0, marginy: 0 });
+    g.setGraph({ rankdir, nodesep: V_GAP, ranksep: H_GAP, marginx: 0, marginy: 0 });
     g.setDefaultEdgeLabel(() => ({}));
     const validIds = new Set(ungroupedCards.map((c) => c.id));
     ungroupedCards.forEach((c) => g.setNode(c.id, { width: CARD_W, height: cardH(c) }));
@@ -153,7 +154,7 @@ export function layoutHierarchy(
   const UNGROUPED_ID = '__ungrouped__';
   const topG = new dagre.graphlib.Graph();
   topG.setGraph({
-    rankdir: 'LR',
+    rankdir,
     nodesep: V_GAP * 2,
     ranksep: H_GAP * 2,
     marginx: 0,

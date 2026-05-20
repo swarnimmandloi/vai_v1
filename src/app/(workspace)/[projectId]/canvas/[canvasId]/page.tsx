@@ -3,6 +3,7 @@
 import { use, useEffect, useState } from 'react';
 import { ReactFlowProvider } from '@xyflow/react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { ChevronLeft } from 'lucide-react';
 import { useUIStore } from '@/store/uiStore';
 import { useCanvasStore } from '@/store/canvasStore';
 import { useAIResponse } from '@/hooks/useAIResponse';
@@ -21,6 +22,20 @@ function CanvasPageInner({ canvasId }: { canvasId: string }) {
   const { loadFrames, clearCanvas } = useCanvasStore();
   const { submit } = useAIResponse();
   const [loaded, setLoaded] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  const [mobileCanvasOpen, setMobileCanvasOpen] = useState(false);
+
+  useEffect(() => {
+    setIsMobile(window.innerWidth < 768);
+  }, []);
+
+  useEffect(() => {
+    function handleFocusFrame() {
+      if (window.innerWidth < 768) setMobileCanvasOpen(true);
+    }
+    window.addEventListener('vai:focus-frame', handleFocusFrame);
+    return () => window.removeEventListener('vai:focus-frame', handleFocusFrame);
+  }, []);
 
   useEffect(() => {
     clearCanvas();
@@ -62,7 +77,6 @@ function CanvasPageInner({ canvasId }: { canvasId: string }) {
       }));
 
       loadFrames(mappedFrames, connections ?? []);
-      // If there are existing frames, skip first visit
       setFirstVisitComplete();
     }
 
@@ -75,7 +89,7 @@ function CanvasPageInner({ canvasId }: { canvasId: string }) {
   }
 
   return (
-    <div className="relative flex h-full">
+    <div className="relative h-full">
       {/* First-visit overlay */}
       <AnimatePresence>
         {!hasSubmittedFirstQuestion && loaded && (
@@ -85,18 +99,51 @@ function CanvasPageInner({ canvasId }: { canvasId: string }) {
 
       {/* Canvas + Chat layout */}
       <motion.div
-        className="flex flex-1 min-w-0 h-full"
+        className="h-full"
+        style={{ display: isMobile ? 'block' : 'flex' }}
         initial={false}
         animate={{ opacity: hasSubmittedFirstQuestion ? 1 : 0 }}
         transition={{ duration: 0.4 }}
       >
-        {/* Canvas */}
-        <div className="flex-1 min-w-0 h-full">
+        {/* Canvas — absolute overlay on mobile, flex child on desktop */}
+        <div
+          className={
+            isMobile
+              ? mobileCanvasOpen
+                ? 'absolute inset-0 z-10 h-full'
+                : 'hidden'
+              : 'flex-1 min-w-0 h-full'
+          }
+        >
+          {isMobile && mobileCanvasOpen && (
+            <button
+              onClick={() => setMobileCanvasOpen(false)}
+              className="absolute top-3 left-3 z-20 flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer"
+              style={{
+                background: 'var(--panel-bg)',
+                border: '1px solid var(--border)',
+                color: 'var(--foreground)',
+              }}
+            >
+              <ChevronLeft size={14} />
+              Back
+            </button>
+          )}
           <CanvasView canvasId={canvasId} />
         </div>
 
-        {/* Chat panel */}
-        <ChatPanel onSubmit={submit} />
+        {/* Chat panel — full width on mobile, fixed width on desktop */}
+        <div
+          className={
+            isMobile && mobileCanvasOpen
+              ? 'hidden'
+              : isMobile
+              ? 'w-full h-full'
+              : ''
+          }
+        >
+          <ChatPanel onSubmit={submit} isMobile={isMobile} />
+        </div>
       </motion.div>
     </div>
   );

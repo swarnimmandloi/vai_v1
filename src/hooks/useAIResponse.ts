@@ -103,8 +103,9 @@ export function useAIResponse() {
           '| connections:', parsed.connections?.length
         );
 
+        const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
         const { positionedSections, positionedCards, responseWidth, responseHeight } =
-          layoutHierarchy(responseId, parsed.sections ?? [], parsed.cards, parsed.connections ?? []);
+          layoutHierarchy(responseId, parsed.sections ?? [], parsed.cards, parsed.connections ?? [], undefined, isMobile ? 'TB' : 'LR');
 
         removeLoadingNode(tempId);
 

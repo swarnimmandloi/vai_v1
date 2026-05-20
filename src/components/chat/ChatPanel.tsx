@@ -9,9 +9,10 @@ import { ChatInput } from './ChatInput';
 
 interface ChatPanelProps {
   onSubmit: (question: string) => void;
+  isMobile?: boolean;
 }
 
-export function ChatPanel({ onSubmit }: ChatPanelProps) {
+export function ChatPanel({ onSubmit, isMobile }: ChatPanelProps) {
   const { messages, isStreaming, streamingText } = useChatStore();
   const { chatPanelOpen, toggleChatPanel } = useUIStore();
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -21,40 +22,44 @@ export function ChatPanel({ onSubmit }: ChatPanelProps) {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, streamingText]);
 
+  const panelOpen = isMobile || chatPanelOpen;
+
   return (
     <div
       className="flex flex-col h-full shrink-0 transition-all duration-200"
       style={{
-        width: chatPanelOpen ? 300 : 40,
+        width: isMobile ? '100%' : (chatPanelOpen ? 300 : 40),
         background: 'var(--panel-bg)',
         borderLeft: '1px solid var(--border)',
       }}
     >
-      {/* Toggle button */}
-      <button
-        onClick={toggleChatPanel}
-        className="flex items-center gap-2 px-3 py-3 border-b w-full text-left transition-colors cursor-pointer"
-        style={{ borderColor: 'var(--border)' }}
-        onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.03)'; }}
-        onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
-      >
-        <MessageSquare size={14} style={{ color: 'var(--muted-fg)', flexShrink: 0 }} />
-        {chatPanelOpen && (
-          <span className="text-xs font-medium flex-1" style={{ color: 'var(--foreground)' }}>
-            Chat
-          </span>
-        )}
-        <ChevronRight
-          size={13}
-          className="transition-transform duration-200 shrink-0"
-          style={{
-            color: 'var(--muted-fg)',
-            transform: chatPanelOpen ? 'rotate(0deg)' : 'rotate(180deg)',
-          }}
-        />
-      </button>
+      {/* Toggle button — hidden on mobile */}
+      {!isMobile && (
+        <button
+          onClick={toggleChatPanel}
+          className="flex items-center gap-2 px-3 py-3 border-b w-full text-left transition-colors cursor-pointer"
+          style={{ borderColor: 'var(--border)' }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.03)'; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
+        >
+          <MessageSquare size={14} style={{ color: 'var(--muted-fg)', flexShrink: 0 }} />
+          {chatPanelOpen && (
+            <span className="text-xs font-medium flex-1" style={{ color: 'var(--foreground)' }}>
+              Chat
+            </span>
+          )}
+          <ChevronRight
+            size={13}
+            className="transition-transform duration-200 shrink-0"
+            style={{
+              color: 'var(--muted-fg)',
+              transform: chatPanelOpen ? 'rotate(0deg)' : 'rotate(180deg)',
+            }}
+          />
+        </button>
+      )}
 
-      {chatPanelOpen && (
+      {panelOpen && (
         <>
           {/* Messages */}
           <div className="flex-1 overflow-y-auto p-3">

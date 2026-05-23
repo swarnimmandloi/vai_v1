@@ -1,64 +1,139 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { SYSTEM_PROMPT, buildUserMessage } from '@/lib/ai/prompts';
-import { AIFrameResponseSchema } from '@/lib/ai/schema';
 import type { AIRequestPayload } from '@/types/ai';
+import type { SectionColor } from '@/types/canvas';
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
+const VALID_COLORS: SectionColor[] = ['blue', 'green', 'purple', 'orange', 'teal', 'red'];
+
 export async function POST(req: Request) {
   const body: AIRequestPayload = await req.json();
-  const { question, canvasContext, threadHistory, selectedFrameId, selectedFrameTitle } = body;
+  const { question, canvasContext, threadHistory, selectedFrameTitle, canvasSnapshot } = body;
 
   const userMessage = buildUserMessage({
     question,
     canvasContext,
     threadHistory,
-    selectedFrameTitle,
+    selectedCardHeading: selectedFrameTitle,
   });
+
+  type MessageContent = Anthropic.MessageParam['content'];
+  const messageContent: MessageContent = canvasSnapshot
+    ? [
+        {
+          type: 'image',
+          source: {
+            type: 'base64',
+            media_type: 'image/jpeg',
+            data: canvasSnapshot,
+          },
+        },
+        { type: 'text', text: userMessage },
+      ]
+    : userMessage;
 
   try {
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-6',
-      max_tokens: 2000,
-      system: [
-        {
-          type: 'text',
-          text: SYSTEM_PROMPT,
-          cache_control: { type: 'ephemeral' },
-        },
-      ],
-      messages: [
-        {
-          role: 'user',
-          content: userMessage,
-        },
-      ],
+      max_tokens: 16000,
+      thinking: { type: 'enabled', budget_tokens: 8000 },
+      system: SYSTEM_PROMPT,
+      messages: [{ role: 'user', content: messageContent }],
     });
 
     const textBlock = response.content.find((b) => b.type === 'text');
     if (!textBlock || textBlock.type !== 'text') {
-      return new Response(JSON.stringify({ error: 'No text response' }), { status: 500 });
+      return Response.json({ error: 'No text in AI response' }, { status: 500 });
     }
 
-    // Extract JSON from the response (handle markdown code fences if present)
     let jsonText = textBlock.text.trim();
     const fenceMatch = jsonText.match(/```(?:json)?\n?([\s\S]*?)\n?```/);
-    if (fenceMatch) jsonText = fenceMatch[1].trim();
-
-    // Validate with Zod
-    const parsed = AIFrameResponseSchema.safeParse(JSON.parse(jsonText));
-    if (!parsed.success) {
-      console.error('Schema validation failed:', parsed.error);
-      return new Response(JSON.stringify({ error: 'Invalid AI response format' }), { status: 500 });
+    if (fenceMatch) {
+      jsonText = fenceMatch[1].trim();
+    } else {
+      jsonText = jsonText.replace(/^```(?:json)?\s*/i, '').trim();
+      const braceStart = jsonText.indexOf('{');
+      const braceEnd = jsonText.lastIndexOf('}');
+      if (braceStart !== -1 && braceEnd > braceStart) {
+        jsonText = jsonText.slice(braceStart, braceEnd + 1);
+      }
     }
 
-    return new Response(JSON.stringify(parsed.data), {
-      headers: { 'Content-Type': 'application/json' },
-    });
-  } catch (err) {
-    console.error('Anthropic API error:', err);
-    return new Response(JSON.stringify({ error: 'AI request failed' }), { status: 500 });
+    console.log('[VAI] raw AI response:\n', jsonText);
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(jsonText);
+    } catch {
+      console.error('JSON parse failed. Raw text:', jsonText.slice(0, 500));
+      return Response.json({ error: 'AI returned invalid JSON' }, { status: 500 });
+    }
+
+    const data = parsed as Record<string, unknown>;
+    if (!data.chat_summary) {
+      return Response.json({ error: 'AI response missing chat_summary' }, { status: 500 });
+    }
+
+    if (Array.isArray(data.cards)) {
+      const normalized = normalizeCardGraph(data);
+      console.log(
+        '[VAI] Response — cards:', normalized.cards.length,
+        '| sections:', normalized.sections.length,
+        '| connections:', normalized.connections.length
+      );
+      return Response.json(normalized);
+    }
+
+    return Response.json({ error: 'AI response missing cards array' }, { status: 500 });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('AI route error:', message);
+    return Response.json({ error: message }, { status: 500 });
   }
+}
+
+function normalizeCardGraph(data: Record<string, unknown>) {
+  const topic = String(data.topic ?? data.title ?? data.heading ?? 'Response');
+
+  const rawSections = (data.sections ?? []) as Record<string, unknown>[];
+  const sections = rawSections.map((s, i) => ({
+    id: String(s.id ?? `sec_${i}`),
+    label: String(s.label ?? s.title ?? s.name ?? ''),
+    color: (VALID_COLORS.includes(s.color as SectionColor)
+      ? s.color
+      : VALID_COLORS[i % VALID_COLORS.length]) as SectionColor,
+  }));
+
+  const sectionIds = new Set(sections.map((s) => s.id));
+
+  const rawCards = (data.cards ?? []) as Record<string, unknown>[];
+  const cards = rawCards.map((c, i) => ({
+    id: String(c.id ?? `card_${i}`),
+    heading: String(c.heading ?? c.title ?? c.name ?? ''),
+    body: String(c.body ?? c.description ?? c.text ?? c.content ?? ''),
+    section: c.section && sectionIds.has(String(c.section)) ? String(c.section) : undefined,
+    has_image: c.has_image !== false,
+  }));
+
+  const cardIds = new Set(cards.map((c) => c.id));
+
+  const rawConnections = (data.connections ?? data.edges ?? []) as Record<string, unknown>[];
+  const connections = rawConnections
+    .map((conn) => ({
+      from: String(conn.from ?? conn.source ?? ''),
+      to: String(conn.to ?? conn.target ?? ''),
+      label: conn.label ? String(conn.label) : undefined,
+    }))
+    .filter(({ from, to }) => cardIds.has(from) && cardIds.has(to));
+
+  return {
+    chat_summary: String(data.chat_summary),
+    topic,
+    sections,
+    cards,
+    connections,
+  };
 }

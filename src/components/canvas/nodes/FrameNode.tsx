@@ -46,6 +46,7 @@ function SortableBlock({ block, frameId }: SortableBlockProps) {
     <div ref={setNodeRef} style={style}>
       <BlockRenderer
         block={block}
+        frameId={frameId}
         onDelete={(id) => removeBlock(frameId, id)}
         onUpdateContent={(id, content) => updateBlockContent(frameId, id, content)}
         dragHandleProps={{ ...attributes, ...listeners }}
@@ -83,7 +84,9 @@ export const FrameNode = memo(function FrameNode({ data, selected, id }: NodePro
   );
 
   const sortedBlocks = [...frame.blocks].sort((a, b) => a.order_index - b.order_index);
-  const isGrid = frame.layout_type === 'grid';
+  const regularBlocks = sortedBlocks.filter((b) => b.block_type !== 'diagram');
+  const diagramBlocks = sortedBlocks.filter((b) => b.block_type === 'diagram');
+  const isGrid = frame.layout_type === 'grid' && regularBlocks.length > 1;
 
   // Dispatch follow-up — we'll wire this to useAIResponse in Phase 5
   function handleFollowUpSubmit(e: React.FormEvent) {
@@ -100,7 +103,7 @@ export const FrameNode = memo(function FrameNode({ data, selected, id }: NodePro
   return (
     <div
       className="relative group"
-      style={{ width: frame.width, minWidth: 300, maxWidth: 520 }}
+      style={{ width: frame.width, minWidth: 300, maxWidth: 640 }}
       onClick={() => setSelectedFrame(id)}
     >
       {/* Connection handles */}
@@ -186,16 +189,30 @@ export const FrameNode = memo(function FrameNode({ data, selected, id }: NodePro
           </div>
         </div>
 
-        {/* Blocks area */}
-        <div className={`p-4 ${isGrid ? 'grid grid-cols-2 gap-3' : 'flex flex-col gap-3'}`}>
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-            <SortableContext items={sortedBlocks.map((b) => b.id)} strategy={verticalListSortingStrategy}>
-              {sortedBlocks.map((block) => (
-                <SortableBlock key={block.id} block={block} frameId={id} />
-              ))}
-            </SortableContext>
-          </DndContext>
-        </div>
+        {/* Text blocks — grid or linear layout */}
+        {regularBlocks.length > 0 && (
+          <div className={`p-4 ${isGrid ? 'grid grid-cols-2 gap-3' : 'flex flex-col gap-3'}`}>
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <SortableContext items={regularBlocks.map((b) => b.id)} strategy={verticalListSortingStrategy}>
+                {regularBlocks.map((block) => (
+                  <SortableBlock key={block.id} block={block} frameId={id} />
+                ))}
+              </SortableContext>
+            </DndContext>
+          </div>
+        )}
+
+        {/* Diagram blocks — always full-width below text blocks */}
+        {diagramBlocks.length > 0 && (
+          <div
+            className="px-4 pb-4 flex flex-col gap-3"
+            style={regularBlocks.length > 0 ? { borderTop: '1px solid var(--border)', paddingTop: '1rem' } : { paddingTop: '1rem' }}
+          >
+            {diagramBlocks.map((block) => (
+              <BlockRenderer key={block.id} block={block} frameId={id} />
+            ))}
+          </div>
+        )}
 
         {/* Follow-up input */}
         <div

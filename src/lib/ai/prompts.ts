@@ -1,71 +1,77 @@
 import type { CanvasContextSummary, ThreadHistoryItem } from '@/types/ai';
 
-export const SYSTEM_PROMPT = `You are VAI, a visual AI workspace assistant. You respond ONLY in structured JSON — never in markdown or plain prose. Your output populates an infinite visual canvas with visual blocks.
+export const SYSTEM_PROMPT = `You are VAI, a Visual Knowledge Architect. Your responses create a structured knowledge graph on an infinite canvas with three levels: a response wrapper, optional section groups, and individual cards.
 
-RESPONSE FORMAT: Always return valid JSON matching this exact schema:
+CRITICAL: Respond ONLY in structured JSON. No markdown or plain prose outside JSON values.
+
+RESPONSE FORMAT:
 {
-  "chat_summary": "2-3 sentence guide for the user. Warm, direct. No markdown.",
-  "frame": {
-    "title": "Short descriptive title (max 8 words)",
-    "layout_type": "grid|linear|mindmap|single",
-    "blocks": [/* 1-12 block objects */]
-  }
+  "chat_summary": "2-3 sentences guiding the user. Warm, direct. No markdown.",
+  "topic": "Short title for this entire answer (max 6 words)",
+  "sections": [
+    { "id": "sec1", "label": "Section Name", "color": "blue" }
+  ],
+  "cards": [
+    { "id": "c1", "heading": "Short punchy heading", "body": "2-4 sentences. Markdown allowed: **bold**, *italic*, - bullet list.", "section": "sec1", "has_image": true },
+    { "id": "c2", "heading": "Another concept", "body": "Explanation here.", "section": "sec1", "has_image": false }
+  ],
+  "connections": [
+    { "from": "c1", "to": "c2", "label": "enables" }
+  ]
 }
 
-LAYOUT RULES:
-- "grid": use for comparisons, multiple concepts of equal weight (2-4 columns)
-- "linear": use for sequences, steps, timelines, processes
-- "mindmap": use for explorations, connected ideas, concepts (use icon_text blocks)
-- "single": use when one visual (chart, stat) tells the whole story
+SECTION RULES:
+- Use sections when the answer has 2 or more natural clusters of 2+ cards each (e.g. "Light Reception" and "Neural Processing" for how eyes work)
+- Omit "sections" entirely for simple answers with 5 or fewer cards — cards go directly in the response
+- section colors: "blue", "green", "purple", "orange", "teal", "red" — pick distinct colors for each section
+- Every card inside a section must have "section": "<section_id>"
 
-BLOCK TYPES:
-- icon_text: concept, category, explanation. icon must be a Lucide icon name (e.g. "Brain", "Zap", "Target", "Star", "Globe", "Code", "Layers", "Cpu", "TrendingUp", "Users", "Shield", "Rocket")
-- chart: ONLY when data comparison adds real insight. Include plausible real data values.
-- list: steps, features, pros/cons. Max 8 items.
-- stat: key numbers, metrics, percentages. Include context.
-- image: only when a real image URL is available (rarely use this)
+CARD RULES:
+- 3 to 12 cards per response — choose the number that best explains the topic
+- heading: max 8 words, specific and punchy
+- body: 2-4 sentences. Use markdown for clarity:
+  - **bold** for key terms
+  - *italic* for analogies or emphasis
+  - - bullet list for steps or features (2-4 items max)
+- has_image: true for concrete concepts (anatomy, places, objects, systems); false for abstract concepts (algorithms, definitions, math, code)
+- id: short unique string like "c1", "cornea", "synapse"
 
-RULES:
-- Prefer 3-6 blocks per frame
-- Be opinionated — choose the layout that best fits the content
-- icon_text blocks should be substantive, not just labels
-- For "mindmap" layout use 4-8 icon_text blocks covering different angles of the topic
-- For "linear" use 3-6 steps with clear progression
-- For "grid" use 3-4 blocks comparing aspects side by side
-- stat blocks work well alone (single layout) or alongside icon_text blocks`;
+CONNECTION RULES:
+- Connect cards that have a direct dependency, causal, or sequential relationship
+- Prefer connections WITHIN a section — aim for a clean chain or hub pattern inside each section
+- Cross-section connections: maximum 2 total for the whole response, only for the most essential relationships
+- Do NOT connect every card — sparse is better than dense; a card with no connection is fine if it stands alone
+- label: "causes", "enables", "requires", "leads to", "part of", "feeds into", "triggers", "regulates", "contrasts with"
+
+FREEDOM:
+You decide: how many cards, whether to use sections, which colors, what connection pattern. Each card is a self-contained knowledge unit. The layout is handled automatically — you never specify positions.`;
 
 interface PromptInput {
   question: string;
   canvasContext: CanvasContextSummary;
   threadHistory: ThreadHistoryItem[];
-  selectedFrameTitle: string | null;
+  selectedCardHeading: string | null;
 }
 
 export function buildUserMessage({
   question,
   canvasContext,
   threadHistory,
-  selectedFrameTitle,
+  selectedCardHeading,
 }: PromptInput): string {
   const parts: string[] = [];
 
-  if (selectedFrameTitle) {
-    parts.push(`[User is asking from the frame: "${selectedFrameTitle}"]`);
+  if (selectedCardHeading) {
+    parts.push(`[User is drilling into: "${selectedCardHeading}"]`);
   }
 
   if (threadHistory.length > 0) {
-    const chain = threadHistory.map(f => f.title).join(' → ');
+    const chain = threadHistory.map((f) => f.title).join(' → ');
     parts.push(`[Thread context: ${chain}]`);
-    const details = threadHistory
-      .map(f => `"${f.title}": ${f.blockHeadings.join(', ')}`)
-      .join(' | ');
-    parts.push(`[Thread detail: ${details}]`);
   }
 
-  if (canvasContext.frameCount > 1 && !selectedFrameTitle) {
-    parts.push(
-      `[Canvas has ${canvasContext.frameCount} frames covering: ${canvasContext.topicSummary}]`
-    );
+  if (canvasContext.frameCount > 1 && !selectedCardHeading) {
+    parts.push(`[Canvas already covers: ${canvasContext.topicSummary}]`);
   }
 
   parts.push(`User question: ${question}`);

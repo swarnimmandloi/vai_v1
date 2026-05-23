@@ -1,3 +1,25 @@
+// Knowledge card — the new canvas primitive
+export type KnowledgeCard = {
+  id: string;
+  heading: string;
+  body: string;
+  section?: string;    // id of the section this card belongs to
+  has_image?: boolean; // defaults true
+};
+
+export type SectionColor = 'blue' | 'green' | 'purple' | 'orange' | 'teal' | 'red';
+
+export interface KnowledgeSection {
+  id: string;
+  label: string;
+  color: SectionColor;
+}
+
+export interface KnowledgeResponse {
+  id: string;
+  topic: string;
+}
+
 // Block content payloads
 export type IconTextContent = {
   icon: string;
@@ -34,7 +56,15 @@ export type NoteContent = {
   author?: string;
 };
 
-export type BlockType = 'icon_text' | 'chart' | 'list' | 'stat' | 'image' | 'note';
+export type DiagramType = 'flowchart' | 'sequenceDiagram' | 'classDiagram' | 'stateDiagram-v2' | 'erDiagram';
+
+export type DiagramContent = {
+  diagram_type: DiagramType;
+  definition: string;
+  caption?: string;
+};
+
+export type BlockType = 'icon_text' | 'chart' | 'list' | 'stat' | 'image' | 'note' | 'diagram';
 
 export type BlockContent =
   | IconTextContent
@@ -42,7 +72,8 @@ export type BlockContent =
   | ListContent
   | StatContent
   | ImageContent
-  | NoteContent;
+  | NoteContent
+  | DiagramContent;
 
 export interface Block {
   id: string;

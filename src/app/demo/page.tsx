@@ -4,6 +4,7 @@ import { ReactFlowProvider } from '@xyflow/react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useUIStore } from '@/store/uiStore';
 import { useAIResponse } from '@/hooks/useAIResponse';
+import { useCanvasFiles } from '@/hooks/useCanvasFiles';
 import { CanvasView } from '@/components/canvas/CanvasView';
 import { ChatPanel } from '@/components/chat/ChatPanel';
 import { FirstVisitOverlay } from '@/components/first-visit/FirstVisitOverlay';
@@ -11,6 +12,7 @@ import { FirstVisitOverlay } from '@/components/first-visit/FirstVisitOverlay';
 function DemoInner() {
   const { hasSubmittedFirstQuestion, setFirstVisitComplete } = useUIStore();
   const { submit } = useAIResponse();
+  useCanvasFiles();
 
   async function handleFirstQuestion(question: string) {
     setFirstVisitComplete();

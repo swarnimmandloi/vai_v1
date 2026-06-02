@@ -85,6 +85,7 @@ interface CanvasStore {
     parentResponseId?: string
   ) => void;
 
+  removeResponseGraph: (responseId: string) => void;
   setCanvasId: (id: string) => void;
   loadFrames: (frames: Frame[], connections: { id: string; source_frame_id: string; target_frame_id: string; label?: string }[]) => void;
   clearCanvas: () => void;
@@ -380,6 +381,18 @@ export const useCanvasStore = create<CanvasStore>()(
           style: { stroke: '#6366f1', strokeWidth: 2 },
           label: conn.label,
         }));
+      }),
+
+    removeResponseGraph: (responseId) =>
+      set((s) => {
+        const toRemove = new Set<string>([responseId]);
+        // collect section children
+        s.nodes.forEach((n) => { if (n.parentId === responseId) toRemove.add(n.id); });
+        // collect card grandchildren
+        s.nodes.forEach((n) => { if (n.parentId && toRemove.has(n.parentId)) toRemove.add(n.id); });
+        s.nodes = s.nodes.filter((n) => !toRemove.has(n.id));
+        s.edges = s.edges.filter((e) => !toRemove.has(e.source) && !toRemove.has(e.target));
+        if (s.selectedFrameId && toRemove.has(s.selectedFrameId)) s.selectedFrameId = null;
       }),
 
     clearCanvas: () => set((s) => { s.nodes = []; s.edges = []; s.selectedFrameId = null; }),

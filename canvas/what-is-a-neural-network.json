@@ -1,0 +1,65 @@
+{
+  "topic": "Neural Networks",
+  "chat_summary": "Neural networks are loosely inspired by the brain. Here are the key concepts that make them work.",
+  "sections": [
+    { "id": "sec1", "label": "Structure", "color": "teal" },
+    { "id": "sec2", "label": "Learning", "color": "orange" }
+  ],
+  "cards": [
+    {
+      "id": "c1",
+      "heading": "Neuron (Node)",
+      "body": "The basic unit. Takes in numbers, multiplies each by a **weight**, sums them up, adds a **bias**, then passes the result through an activation function.",
+      "section": "sec1",
+      "has_image": false
+    },
+    {
+      "id": "c2",
+      "heading": "Layers",
+      "body": "Neurons are grouped into layers. **Input layer** receives raw data. **Hidden layers** transform it. **Output layer** produces the prediction.",
+      "section": "sec1",
+      "has_image": false
+    },
+    {
+      "id": "c3",
+      "heading": "Activation Function",
+      "body": "Adds non-linearity so the network can learn complex patterns. Common choices: *ReLU* (max(0, x)), *sigmoid* (0–1 output), *softmax* (probabilities that sum to 1).",
+      "section": "sec1",
+      "has_image": false
+    },
+    {
+      "id": "c4",
+      "heading": "Forward Pass",
+      "body": "Data flows left to right through all layers. Each layer transforms the signal. The final layer outputs a prediction.",
+      "section": "sec2",
+      "has_image": false
+    },
+    {
+      "id": "c5",
+      "heading": "Loss Function",
+      "body": "Measures how wrong the prediction is. **Cross-entropy** for classification, **MSE** for regression. Training = minimising this number.",
+      "section": "sec2",
+      "has_image": false
+    },
+    {
+      "id": "c6",
+      "heading": "Backpropagation",
+      "body": "Works backwards from the loss, computing how much each weight contributed to the error using the chain rule from calculus.",
+      "section": "sec2",
+      "has_image": false
+    },
+    {
+      "id": "c7",
+      "heading": "Gradient Descent",
+      "body": "Nudges every weight slightly in the direction that reduces the loss. **Learning rate** controls how big each nudge is. Repeat thousands of times.",
+      "section": "sec2",
+      "has_image": false
+    }
+  ],
+  "connections": [
+    { "from": "c1", "to": "c2", "label": "grouped into" },
+    { "from": "c4", "to": "c5", "label": "produces" },
+    { "from": "c5", "to": "c6", "label": "feeds into" },
+    { "from": "c6", "to": "c7", "label": "enables" }
+  ]
+}

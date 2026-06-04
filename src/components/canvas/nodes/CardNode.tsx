@@ -31,8 +31,9 @@ export const CardNode = memo(function CardNode({
   const [imgError, setImgError] = useState(false);
   const setSelectedFrame = useCanvasStore((s) => s.setSelectedFrame);
 
-  const showImage = card.has_image !== false;
-  const imageUrl = `https://picsum.photos/seed/${stableHash(card.heading)}/240/140`;
+  const showImage = !!(card.image_url || card.has_image !== false);
+  const imageUrl = card.image_url
+    ?? `https://image.pollinations.ai/prompt/${encodeURIComponent(card.heading)}?width=240&height=140&nologo=true&seed=${stableHash(card.heading)}`;
 
   function handleFollowUp(e: React.FormEvent) {
     e.preventDefault();

@@ -11,14 +11,14 @@
       "heading": "Neuron (Node)",
       "body": "The basic unit. Takes in numbers, multiplies each by a **weight**, sums them up, adds a **bias**, then passes the result through an activation function.",
       "section": "sec1",
-      "has_image": false
+      "has_image": true
     },
     {
       "id": "c2",
       "heading": "Layers",
       "body": "Neurons are grouped into layers. **Input layer** receives raw data. **Hidden layers** transform it. **Output layer** produces the prediction.",
       "section": "sec1",
-      "has_image": false
+      "has_image": true
     },
     {
       "id": "c3",

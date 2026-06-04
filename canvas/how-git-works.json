@@ -12,7 +12,7 @@
       "heading": "Commit",
       "body": "A snapshot of your entire project at a point in time. Every commit has a unique SHA hash and points to its parent commit, forming a chain.",
       "section": "sec1",
-      "has_image": false
+      "has_image": true
     },
     {
       "id": "c2",
@@ -47,7 +47,7 @@
       "heading": "Remote (origin)",
       "body": "A copy of the repository hosted elsewhere (GitHub, GitLab). `git push` sends your commits there. `git pull` fetches and merges their commits into yours.",
       "section": "sec3",
-      "has_image": false
+      "has_image": true
     },
     {
       "id": "c7",

@@ -3,8 +3,9 @@ export type KnowledgeCard = {
   id: string;
   heading: string;
   body: string;
-  section?: string;    // id of the section this card belongs to
-  has_image?: boolean; // defaults true
+  section?: string;
+  has_image?: boolean;
+  image_url?: string;  // explicit URL — overrides auto-generation
 };
 
 export type SectionColor = 'blue' | 'green' | 'purple' | 'orange' | 'teal' | 'red';

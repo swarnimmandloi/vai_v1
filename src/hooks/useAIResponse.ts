@@ -9,6 +9,7 @@ import type { KnowledgeCard, KnowledgeSection } from '@/types/canvas';
 import { generateId } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
 import { layoutHierarchy, CARD_W } from '@/lib/canvas/layoutHierarchy';
+import { saveRecentCanvas } from '@/lib/recentCanvases';
 
 export function useAIResponse() {
   const { getCanvasSummary, getThreadHistory, selectedFrameId } = useCanvasContext();
@@ -123,6 +124,7 @@ export function useAIResponse() {
 
         setSelectedFrame(responseId);
         commitAIMessage(parsed.chat_summary, responseId);
+        saveRecentCanvas(question, parsed);
 
         const supabaseConfigured = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
         if (canvasId && canvasId !== 'demo' && supabaseConfigured) {

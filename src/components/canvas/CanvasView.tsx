@@ -7,6 +7,7 @@ import {
   Controls,
   MiniMap,
   BackgroundVariant,
+  PanOnScrollMode,
   type NodeTypes,
   useReactFlow,
   useNodesInitialized,
@@ -19,6 +20,7 @@ import { SectionNode } from './nodes/SectionNode';
 import { ResponseNode } from './nodes/ResponseNode';
 import type { CardNodeData, SectionNodeData, ResponseNodeData } from '@/store/canvasStore';
 import { layoutHierarchy } from '@/lib/canvas/layoutHierarchy';
+import { SaveButton } from './SaveButton';
 
 const nodeTypes: NodeTypes = {
   frame: FrameNode as NodeTypes['frame'],
@@ -128,8 +130,15 @@ export function CanvasView({ canvasId }: CanvasViewProps) {
       const { frameId } = (e as CustomEvent).detail;
       fitView({ nodes: [{ id: frameId }], duration: 500, padding: 0.3 });
     }
+    function handleFitView() {
+      fitView({ duration: 600, padding: 0.25 });
+    }
     window.addEventListener('vai:focus-frame', handleFocusFrame);
-    return () => window.removeEventListener('vai:focus-frame', handleFocusFrame);
+    window.addEventListener('vai:fit-view', handleFitView);
+    return () => {
+      window.removeEventListener('vai:focus-frame', handleFocusFrame);
+      window.removeEventListener('vai:fit-view', handleFitView);
+    };
   }, [fitView]);
 
   const handlePaneClick = useCallback(() => {
@@ -137,7 +146,7 @@ export function CanvasView({ canvasId }: CanvasViewProps) {
   }, [setSelectedFrame]);
 
   return (
-    <div className="w-full h-full" style={{ background: 'var(--canvas-bg)' }}>
+    <div className="w-full h-full" style={{ background: 'var(--canvas-bg)', position: 'relative' }}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -151,6 +160,9 @@ export function CanvasView({ canvasId }: CanvasViewProps) {
         minZoom={0.05}
         maxZoom={2}
         zoomOnDoubleClick={false}
+        panOnScroll={true}
+        panOnScrollMode={PanOnScrollMode.Free}
+        zoomOnScroll={false}
         deleteKeyCode="Delete"
         proOptions={{ hideAttribution: true }}
       >
@@ -182,6 +194,7 @@ export function CanvasView({ canvasId }: CanvasViewProps) {
           }}
         />
       </ReactFlow>
+      <SaveButton />
     </div>
   );
 }

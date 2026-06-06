@@ -28,11 +28,13 @@ export const CardNode = memo(function CardNode({
   const { card } = data;
   const [followUpText, setFollowUpText] = useState('');
   const [imgLoaded, setImgLoaded] = useState(false);
-  const [imgError, setImgError] = useState(false);
   const setSelectedFrame = useCanvasStore((s) => s.setSelectedFrame);
 
-  const showImage = card.has_image !== false;
-  const imageUrl = `https://picsum.photos/seed/${stableHash(card.heading)}/240/140`;
+  const showImage = !!(card.image_url || card.has_image !== false);
+  const picsumUrl = `https://picsum.photos/seed/${stableHash(card.heading)}/240/140`;
+  const primaryUrl = card.image_url
+    ?? `https://image.pollinations.ai/prompt/${encodeURIComponent(card.heading)}?width=240&height=140&nologo=true&seed=${stableHash(card.heading)}`;
+  const [imgSrc, setImgSrc] = useState(primaryUrl);
 
   function handleFollowUp(e: React.FormEvent) {
     e.preventDefault();
@@ -66,7 +68,7 @@ export const CardNode = memo(function CardNode({
         }}
       >
         {/* Image */}
-        {showImage && !imgError && (
+        {showImage && (
           <div
             style={{
               height: 140,
@@ -76,7 +78,7 @@ export const CardNode = memo(function CardNode({
             }}
           >
             <img
-              src={imageUrl}
+              src={imgSrc}
               alt=""
               style={{
                 width: '100%',
@@ -87,7 +89,12 @@ export const CardNode = memo(function CardNode({
               }}
               loading="lazy"
               onLoad={() => setImgLoaded(true)}
-              onError={() => setImgError(true)}
+              onError={() => {
+                if (imgSrc !== picsumUrl) {
+                  setImgSrc(picsumUrl);
+                  setImgLoaded(false);
+                }
+              }}
             />
           </div>
         )}

@@ -1,0 +1,66 @@
+{
+  "topic": "How Git Works",
+  "chat_summary": "Git is a distributed version control system. Here's how its core concepts connect.",
+  "sections": [
+    { "id": "sec1", "label": "Core Objects", "color": "blue" },
+    { "id": "sec2", "label": "Working Areas", "color": "green" },
+    { "id": "sec3", "label": "Remote Workflow", "color": "purple" }
+  ],
+  "cards": [
+    {
+      "id": "c1",
+      "heading": "Commit",
+      "body": "A snapshot of your entire project at a point in time. Every commit has a unique SHA hash and points to its parent commit, forming a chain.",
+      "section": "sec1",
+      "has_image": true
+    },
+    {
+      "id": "c2",
+      "heading": "Tree & Blob",
+      "body": "A **tree** is a directory listing. A **blob** is a file's content. Commits point to trees, trees point to blobs. Git stores everything by content hash.",
+      "section": "sec1",
+      "has_image": false
+    },
+    {
+      "id": "c3",
+      "heading": "Working Directory",
+      "body": "The files you actually edit on disk. Changes here are *unstaged* — Git knows about them but won't include them in the next commit.",
+      "section": "sec2",
+      "has_image": false
+    },
+    {
+      "id": "c4",
+      "heading": "Staging Area (Index)",
+      "body": "A middle layer between your working directory and the repo. `git add` moves changes here. Only staged changes go into the next commit.",
+      "section": "sec2",
+      "has_image": false
+    },
+    {
+      "id": "c5",
+      "heading": "Local Repository",
+      "body": "The `.git` folder on your machine. Contains the full history, all objects, and all branches. `git commit` writes to here.",
+      "section": "sec2",
+      "has_image": false
+    },
+    {
+      "id": "c6",
+      "heading": "Remote (origin)",
+      "body": "A copy of the repository hosted elsewhere (GitHub, GitLab). `git push` sends your commits there. `git pull` fetches and merges their commits into yours.",
+      "section": "sec3",
+      "has_image": true
+    },
+    {
+      "id": "c7",
+      "heading": "Branch",
+      "body": "A lightweight pointer to a commit. Creating a branch is instant — it's just a file containing a SHA. `HEAD` points to whichever branch you're on.",
+      "section": "sec3",
+      "has_image": false
+    }
+  ],
+  "connections": [
+    { "from": "c3", "to": "c4", "label": "git add" },
+    { "from": "c4", "to": "c5", "label": "git commit" },
+    { "from": "c5", "to": "c6", "label": "git push" },
+    { "from": "c1", "to": "c2", "label": "references" }
+  ]
+}

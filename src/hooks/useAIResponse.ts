@@ -10,6 +10,7 @@ import { generateId } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
 import { layoutHierarchy, CARD_W } from '@/lib/canvas/layoutHierarchy';
 import { saveRecentCanvas } from '@/lib/recentCanvases';
+import { slugify } from '@/lib/utils';
 
 export function useAIResponse() {
   const { getCanvasSummary, getThreadHistory, selectedFrameId } = useCanvasContext();
@@ -125,6 +126,18 @@ export function useAIResponse() {
         setSelectedFrame(responseId);
         commitAIMessage(parsed.chat_summary, responseId);
         saveRecentCanvas(question, parsed);
+
+        // Dev only: persist to canvas/[slug].json so it survives reloads + shows in Recent
+        if (process.env.NODE_ENV === 'development') {
+          fetch('/api/canvas-save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              filename: `${slugify(parsed.topic)}.json`,
+              content: { ...parsed, question, position: clusterOffset },
+            }),
+          }).catch(console.error);
+        }
 
         const supabaseConfigured = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
         if (canvasId && canvasId !== 'demo' && supabaseConfigured) {

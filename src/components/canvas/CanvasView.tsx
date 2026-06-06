@@ -7,6 +7,7 @@ import {
   Controls,
   MiniMap,
   BackgroundVariant,
+  PanOnScrollMode,
   type NodeTypes,
   useReactFlow,
   useNodesInitialized,
@@ -158,6 +159,9 @@ export function CanvasView({ canvasId }: CanvasViewProps) {
         minZoom={0.05}
         maxZoom={2}
         zoomOnDoubleClick={false}
+        panOnScroll={true}
+        panOnScrollMode={PanOnScrollMode.Free}
+        zoomOnScroll={false}
         deleteKeyCode="Delete"
         proOptions={{ hideAttribution: true }}
       >

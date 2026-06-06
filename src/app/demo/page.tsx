@@ -62,9 +62,12 @@ function DemoInner() {
         const { positionedSections, positionedCards, responseWidth, responseHeight } =
           layoutHierarchy(responseId, sections, cards, connections, undefined, isMobile ? 'TB' : 'LR');
 
-        addResponseGraph(responseId, normalized.topic, positionedSections, positionedCards, connections, { x: xOffset, y: 80 }, responseWidth, responseHeight);
+        const savedPos = content.position as { x: number; y: number } | undefined;
+        const position = savedPos ?? { x: xOffset, y: 80 };
+        if (!savedPos) xOffset += responseWidth + 100;
+
+        addResponseGraph(responseId, normalized.topic, positionedSections, positionedCards, connections, position, responseWidth, responseHeight);
         commitAIMessage(normalized.chat_summary, responseId);
-        xOffset += responseWidth + 100;
       }
 
       setTimeout(() => window.dispatchEvent(new CustomEvent('vai:fit-view')), 700);
@@ -81,7 +84,8 @@ function DemoInner() {
     const { positionedSections, positionedCards, responseWidth, responseHeight } =
       layoutHierarchy(responseId, data.sections ?? [], data.cards, data.connections ?? [], undefined, isMobile ? 'TB' : 'LR');
 
-    addResponseGraph(responseId, data.topic, positionedSections, positionedCards, data.connections ?? [], { x: 0, y: 0 }, responseWidth, responseHeight);
+    const position = (data as { position?: { x: number; y: number } }).position ?? { x: 0, y: 0 };
+    addResponseGraph(responseId, data.topic, positionedSections, positionedCards, data.connections ?? [], position, responseWidth, responseHeight);
     setSelectedFrame(responseId);
     commitAIMessage(data.chat_summary, responseId);
 

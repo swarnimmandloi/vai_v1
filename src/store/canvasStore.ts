@@ -397,17 +397,40 @@ export const useCanvasStore = create<CanvasStore>()(
 
     clearCanvas: () => set((s) => { s.nodes = []; s.edges = []; s.selectedFrameId = null; }),
 
-    getNextFramePosition: (parentId) => {
+    getNextFramePosition: (nodeId) => {
       const { nodes } = get();
-      if (parentId) {
-        const parent = nodes.find((n) => n.id === parentId);
-        if (parent) {
-          return { x: parent.position.x + 440, y: parent.position.y };
+      const responseNodes = nodes.filter((n) => n.type === 'response');
+
+      // Resolve nodeId → ancestor response node (absolute position + actual style.width from Dagre)
+      let responseNode: Node | undefined;
+      if (nodeId) {
+        const sel = nodes.find((n) => n.id === nodeId);
+        if (sel?.type === 'response') {
+          responseNode = sel;
+        } else if (sel?.parentId) {
+          const parent = nodes.find((n) => n.id === sel.parentId);
+          if (parent?.type === 'response') {
+            responseNode = parent;
+          } else if (parent?.parentId) {
+            responseNode = nodes.find((n) => n.id === parent.parentId && n.type === 'response');
+          }
         }
       }
-      if (nodes.length === 0) return { x: 100, y: 100 };
-      const maxX = Math.max(...nodes.map((n) => n.position.x + 400));
-      return { x: maxX + 60, y: 100 };
+
+      if (responseNode) {
+        const w = (responseNode.style?.width as number) ?? 500;
+        return { x: responseNode.position.x + w + 80, y: responseNode.position.y };
+      }
+
+      if (responseNodes.length === 0) return { x: 100, y: 100 };
+
+      const rightmost = responseNodes.reduce((max, n) => {
+        const r = n.position.x + ((n.style?.width as number) ?? 500);
+        const mr = max.position.x + ((max.style?.width as number) ?? 500);
+        return r > mr ? n : max;
+      });
+      const w = (rightmost.style?.width as number) ?? 500;
+      return { x: rightmost.position.x + w + 80, y: 100 };
     },
   }))
 );

@@ -10,6 +10,7 @@ import { useChatStore } from '@/store/chatStore';
 import { CanvasView } from '@/components/canvas/CanvasView';
 import { ChatPanel } from '@/components/chat/ChatPanel';
 import { FirstVisitOverlay } from '@/components/first-visit/FirstVisitOverlay';
+import { normalizeCardGraph } from '@/lib/ai/normalize';
 import { layoutHierarchy } from '@/lib/canvas/layoutHierarchy';
 import { generateId } from '@/lib/utils';
 import type { RecentCanvas } from '@/lib/recentCanvases';
@@ -26,6 +27,35 @@ function DemoInner() {
     await submit(question);
   }
 
+  // Load all canvas JSON files and show them side by side
+  async function handleLoadAllFiles() {
+    try {
+      const res = await fetch('/api/canvas-files');
+      if (!res.ok) return;
+      const files: Array<{ filename: string; content: Record<string, unknown> }> = await res.json();
+      if (!files.length) return;
+
+      setFirstVisitComplete();
+
+      const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+      let xOffset = 0;
+
+      for (const { content } of files) {
+        const normalized = normalizeCardGraph(content);
+        const responseId = generateId();
+        const { positionedSections, positionedCards, responseWidth, responseHeight } =
+          layoutHierarchy(responseId, normalized.sections, normalized.cards, normalized.connections, undefined, isMobile ? 'TB' : 'LR');
+
+        addResponseGraph(responseId, normalized.topic, positionedSections, positionedCards, normalized.connections, { x: xOffset, y: 80 }, responseWidth, responseHeight);
+        commitAIMessage(normalized.chat_summary, responseId);
+        xOffset += responseWidth + 100;
+      }
+
+      setTimeout(() => window.dispatchEvent(new CustomEvent('vai:fit-view')), 700);
+    } catch {}
+  }
+
+  // Load a single AI session from localStorage
   function handleOpenRecent(canvas: RecentCanvas) {
     setFirstVisitComplete();
 
@@ -33,49 +63,29 @@ function DemoInner() {
     const { data } = canvas;
     const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
     const { positionedSections, positionedCards, responseWidth, responseHeight } =
-      layoutHierarchy(
-        responseId,
-        data.sections ?? [],
-        data.cards,
-        data.connections ?? [],
-        undefined,
-        isMobile ? 'TB' : 'LR'
-      );
+      layoutHierarchy(responseId, data.sections ?? [], data.cards, data.connections ?? [], undefined, isMobile ? 'TB' : 'LR');
 
-    addResponseGraph(
-      responseId,
-      data.topic,
-      positionedSections,
-      positionedCards,
-      data.connections ?? [],
-      { x: 0, y: 0 },
-      responseWidth,
-      responseHeight
-    );
-
+    addResponseGraph(responseId, data.topic, positionedSections, positionedCards, data.connections ?? [], { x: 0, y: 0 }, responseWidth, responseHeight);
     setSelectedFrame(responseId);
     commitAIMessage(data.chat_summary, responseId);
 
     setTimeout(() => {
-      window.dispatchEvent(
-        new CustomEvent('vai:focus-frame', { detail: { frameId: responseId } })
-      );
+      window.dispatchEvent(new CustomEvent('vai:focus-frame', { detail: { frameId: responseId } }));
     }, 100);
   }
 
   return (
     <div className="relative flex h-full" style={{ background: 'var(--background)' }}>
-      {/* First-visit overlay */}
       <AnimatePresence>
         {!hasSubmittedFirstQuestion && (
           <FirstVisitOverlay
             onSubmit={handleFirstQuestion}
             onOpenRecent={handleOpenRecent}
+            onLoadAllFiles={handleLoadAllFiles}
           />
         )}
       </AnimatePresence>
 
-      {/* Canvas + Chat */}
       <motion.div
         className="flex flex-1 min-w-0 h-full"
         initial={false}

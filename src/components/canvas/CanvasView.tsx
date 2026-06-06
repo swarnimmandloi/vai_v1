@@ -128,8 +128,15 @@ export function CanvasView({ canvasId }: CanvasViewProps) {
       const { frameId } = (e as CustomEvent).detail;
       fitView({ nodes: [{ id: frameId }], duration: 500, padding: 0.3 });
     }
+    function handleFitView() {
+      fitView({ duration: 600, padding: 0.25 });
+    }
     window.addEventListener('vai:focus-frame', handleFocusFrame);
-    return () => window.removeEventListener('vai:focus-frame', handleFocusFrame);
+    window.addEventListener('vai:fit-view', handleFitView);
+    return () => {
+      window.removeEventListener('vai:focus-frame', handleFocusFrame);
+      window.removeEventListener('vai:fit-view', handleFitView);
+    };
   }, [fitView]);
 
   const handlePaneClick = useCallback(() => {

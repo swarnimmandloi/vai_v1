@@ -8,7 +8,7 @@
   "cards": [
     {
       "id": "c1",
-      "heading": "Neuron (Node)",
+      "heading": "Neuron (Swarnim)",
       "body": "The basic unit. Takes in numbers, multiplies each by a **weight**, sums them up, adds a **bias**, then passes the result through an activation function.",
       "section": "sec1",
       "has_image": true

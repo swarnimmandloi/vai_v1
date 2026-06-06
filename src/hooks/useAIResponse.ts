@@ -8,7 +8,7 @@ import { useCanvasContext } from './useCanvasContext';
 import type { KnowledgeCard, KnowledgeSection } from '@/types/canvas';
 import { generateId } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
-import { layoutHierarchy, CARD_W } from '@/lib/canvas/layoutHierarchy';
+import { layoutHierarchy } from '@/lib/canvas/layoutHierarchy';
 import { saveRecentCanvas } from '@/lib/recentCanvases';
 import { slugify } from '@/lib/utils';
 
@@ -141,7 +141,7 @@ export function useAIResponse() {
 
         const supabaseConfigured = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
         if (canvasId && canvasId !== 'demo' && supabaseConfigured) {
-          persistCards(parsed.cards, positionedCards, canvasId).catch(console.error);
+          persistFile(responseId, canvasId, clusterOffset, parsed).catch(console.error);
         }
 
         setTimeout(() => {
@@ -178,27 +178,46 @@ export function useAIResponse() {
   return { submit };
 }
 
-async function persistCards(
-  cards: KnowledgeCard[],
-  positionedCards: Array<{ card: KnowledgeCard; position: { x: number; y: number } }>,
-  canvasId: string
+async function persistFile(
+  responseId: string,
+  canvasId: string,
+  position: { x: number; y: number },
+  parsed: {
+    topic: string;
+    chat_summary: string;
+    sections: KnowledgeSection[];
+    cards: KnowledgeCard[];
+    connections: Array<{ from: string; to: string; label?: string }>;
+  }
 ) {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL) return;
   const supabase = createClient();
 
-  const posMap = new Map(positionedCards.map((p) => [p.card.id, p.position]));
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
 
-  await supabase.from('frames').insert(
-    cards.map((c) => ({
-      id: c.id,
-      canvas_id: canvasId,
-      title: c.heading,
-      position_x: posMap.get(c.id)?.x ?? 0,
-      position_y: posMap.get(c.id)?.y ?? 0,
-      width: CARD_W,
-      layout_type: 'single',
-      parent_id: null,
-      thread_id: generateId(),
-    }))
-  );
+  const { data: canvas } = await supabase
+    .from('canvases')
+    .select('project_id')
+    .eq('id', canvasId)
+    .single();
+  if (!canvas) return;
+
+  await supabase.from('files').insert({
+    id: responseId,
+    user_id: user.id,
+    project_id: canvas.project_id,
+    canvas_id: canvasId,
+    path: `${canvas.project_id}/${canvasId}/${responseId}.json`,
+    type: 'frame',
+    content: {
+      topic: parsed.topic,
+      chat_summary: parsed.chat_summary,
+      sections: parsed.sections ?? [],
+      cards: parsed.cards,
+      connections: parsed.connections ?? [],
+    },
+    position_x: position.x,
+    position_y: position.y,
+  });
 }

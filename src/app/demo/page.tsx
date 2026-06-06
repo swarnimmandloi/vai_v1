@@ -43,10 +43,26 @@ function DemoInner() {
       for (const { content } of files) {
         const normalized = normalizeCardGraph(content);
         const responseId = generateId();
-        const { positionedSections, positionedCards, responseWidth, responseHeight } =
-          layoutHierarchy(responseId, normalized.sections, normalized.cards, normalized.connections, undefined, isMobile ? 'TB' : 'LR');
 
-        addResponseGraph(responseId, normalized.topic, positionedSections, positionedCards, normalized.connections, { x: xOffset, y: 80 }, responseWidth, responseHeight);
+        // Prefix all IDs with responseId so multiple files with the same
+        // card IDs (c1, c2, sec1…) don't collide in the React Flow node store
+        const p = responseId;
+        const sections = normalized.sections.map((s) => ({ ...s, id: `${p}-${s.id}` }));
+        const cards = normalized.cards.map((c) => ({
+          ...c,
+          id: `${p}-${c.id}`,
+          section: c.section ? `${p}-${c.section}` : undefined,
+        }));
+        const connections = normalized.connections.map((conn) => ({
+          ...conn,
+          from: `${p}-${conn.from}`,
+          to: `${p}-${conn.to}`,
+        }));
+
+        const { positionedSections, positionedCards, responseWidth, responseHeight } =
+          layoutHierarchy(responseId, sections, cards, connections, undefined, isMobile ? 'TB' : 'LR');
+
+        addResponseGraph(responseId, normalized.topic, positionedSections, positionedCards, connections, { x: xOffset, y: 80 }, responseWidth, responseHeight);
         commitAIMessage(normalized.chat_summary, responseId);
         xOffset += responseWidth + 100;
       }

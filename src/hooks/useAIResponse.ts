@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback } from 'react';
+import { useReactFlow } from '@xyflow/react';
 import { useCanvasStore } from '@/store/canvasStore';
 import { useChatStore } from '@/store/chatStore';
 import { useUIStore } from '@/store/uiStore';
@@ -13,6 +14,7 @@ import { slugify } from '@/lib/utils';
 
 export function useAIResponse() {
   const { getCanvasSummary, getThreadHistory, selectedFrameId } = useCanvasContext();
+  const { getNodes } = useReactFlow();
   const {
     addResponseGraph,
     addLoadingNode,
@@ -32,7 +34,7 @@ export function useAIResponse() {
       addUserMessage(question);
 
       const responseId = generateId();
-      const clusterOffset = getNextFramePosition(selectedFrameId ?? undefined);
+      const clusterOffset = getMeasuredNextPosition(getNodes(), selectedFrameId ?? undefined);
       const tempId = `loading-${generateId()}`;
       addLoadingNode(tempId, clusterOffset);
       setStreaming(true, tempId);
@@ -159,6 +161,7 @@ export function useAIResponse() {
       selectedFrameId,
       canvasId,
       nodes,
+      getNodes,
       getCanvasSummary,
       getThreadHistory,
       addUserMessage,
@@ -168,13 +171,58 @@ export function useAIResponse() {
       addResponseGraph,
       addLoadingNode,
       removeLoadingNode,
-      getNextFramePosition,
       setSelectedFrame,
       setFirstVisitComplete,
     ]
   );
 
   return { submit };
+}
+
+import type { Node } from '@xyflow/react';
+
+/**
+ * Calculate the position for the next response using React Flow's
+ * actual measured node dimensions (post-relayout), not Dagre estimates.
+ * This prevents overlap when the relayout makes a response wider than estimated.
+ */
+function getMeasuredNextPosition(
+  allNodes: Node[],
+  selectedNodeId?: string
+): { x: number; y: number } {
+  const GAP = 160;
+  const DEFAULT_WIDTH = 700;
+  const responseNodes = allNodes.filter((n) => n.type === 'response');
+
+  // Width of a response = measured width (post-relayout) > style.width (Dagre estimate) > default
+  const responseWidth = (n: Node) =>
+    (n.measured?.width as number | undefined) ??
+    (n.style?.width as number | undefined) ??
+    DEFAULT_WIDTH;
+
+  // If a specific node is selected, branch from its response cluster
+  if (selectedNodeId) {
+    const sel = allNodes.find((n) => n.id === selectedNodeId);
+    let responseNode: Node | undefined;
+    if (sel?.type === 'response') {
+      responseNode = sel;
+    } else if (sel?.parentId) {
+      const parent = allNodes.find((n) => n.id === sel.parentId);
+      if (parent?.type === 'response') responseNode = parent;
+      else if (parent?.parentId)
+        responseNode = allNodes.find((n) => n.id === parent.parentId && n.type === 'response');
+    }
+    if (responseNode) {
+      return { x: responseNode.position.x + responseWidth(responseNode) + GAP, y: responseNode.position.y };
+    }
+  }
+
+  if (responseNodes.length === 0) return { x: 100, y: 100 };
+
+  const rightmost = responseNodes.reduce((max, n) => {
+    return n.position.x + responseWidth(n) > max.position.x + responseWidth(max) ? n : max;
+  });
+  return { x: rightmost.position.x + responseWidth(rightmost) + GAP, y: 100 };
 }
 
 async function persistFile(

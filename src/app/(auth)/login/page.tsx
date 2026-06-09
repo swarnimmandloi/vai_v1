@@ -3,11 +3,9 @@
 export const dynamic = 'force-dynamic';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 
 export default function LoginPage() {
-  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -24,19 +22,20 @@ export default function LoginPage() {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
         setError(error.message);
+        setLoading(false);
       } else {
-        router.push('/projects');
+        // Full reload so the server picks up the session cookies properly
+        window.location.href = '/projects';
       }
     } else {
       const { error } = await supabase.auth.signUp({ email, password });
       if (error) {
         setError(error.message);
+        setLoading(false);
       } else {
-        router.push('/projects');
+        window.location.href = '/projects';
       }
     }
-
-    setLoading(false);
   }
 
   const inputStyle = {

@@ -1,3 +1,10 @@
+-- Grant table access to Supabase roles
+-- (Required when creating tables via SQL editor instead of Supabase UI)
+grant all on public.projects to anon, authenticated;
+grant all on public.canvases to anon, authenticated;
+grant all on public.files to anon, authenticated;
+grant all on public.file_versions to anon, authenticated;
+
 -- Enable RLS
 alter table public.projects enable row level security;
 alter table public.canvases enable row level security;

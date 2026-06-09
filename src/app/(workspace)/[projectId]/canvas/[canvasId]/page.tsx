@@ -10,7 +10,6 @@ import { useAIResponse } from '@/hooks/useAIResponse';
 import { CanvasView } from '@/components/canvas/CanvasView';
 import { ChatPanel } from '@/components/chat/ChatPanel';
 import { FirstVisitOverlay } from '@/components/first-visit/FirstVisitOverlay';
-import { createClient } from '@/lib/supabase/client';
 import { useChatStore } from '@/store/chatStore';
 import { normalizeCardGraph } from '@/lib/ai/normalize';
 import { layoutHierarchy } from '@/lib/canvas/layoutHierarchy';
@@ -46,13 +45,8 @@ function CanvasPageInner({ canvasId }: { canvasId: string }) {
   }, [canvasId]);
 
   async function loadCanvasData() {
-    const supabase = createClient();
-    const { data: files } = await supabase
-      .from('files')
-      .select('*')
-      .eq('canvas_id', canvasId)
-      .eq('type', 'frame')
-      .order('created_at', { ascending: true });
+    const res = await fetch(`/api/files?canvasId=${canvasId}`);
+    const { files } = res.ok ? await res.json() : { files: [] };
 
     if (files && files.length > 0) {
       const isMobile = window.innerWidth < 768;

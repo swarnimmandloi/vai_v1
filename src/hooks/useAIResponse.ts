@@ -7,7 +7,6 @@ import { useUIStore } from '@/store/uiStore';
 import { useCanvasContext } from './useCanvasContext';
 import type { KnowledgeCard, KnowledgeSection } from '@/types/canvas';
 import { generateId } from '@/lib/utils';
-import { createClient } from '@/lib/supabase/client';
 import { layoutHierarchy } from '@/lib/canvas/layoutHierarchy';
 import { saveRecentCanvas } from '@/lib/recentCanvases';
 import { slugify } from '@/lib/utils';
@@ -191,33 +190,26 @@ async function persistFile(
   }
 ) {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL) return;
-  const supabase = createClient();
 
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return;
-
-  const { data: canvas } = await supabase
-    .from('canvases')
-    .select('project_id')
-    .eq('id', canvasId)
-    .single();
-  if (!canvas) return;
-
-  await supabase.from('files').insert({
-    id: responseId,
-    user_id: user.id,
-    project_id: canvas.project_id,
-    canvas_id: canvasId,
-    path: `${canvas.project_id}/${canvasId}/${responseId}.json`,
-    type: 'frame',
-    content: {
-      topic: parsed.topic,
-      chat_summary: parsed.chat_summary,
-      sections: parsed.sections ?? [],
-      cards: parsed.cards,
-      connections: parsed.connections ?? [],
-    },
-    position_x: position.x,
-    position_y: position.y,
+  const res = await fetch('/api/files', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      id: responseId,
+      canvasId,
+      position,
+      content: {
+        topic: parsed.topic,
+        chat_summary: parsed.chat_summary,
+        sections: parsed.sections ?? [],
+        cards: parsed.cards,
+        connections: parsed.connections ?? [],
+      },
+    }),
   });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    console.error('[VAI] persistFile failed:', err);
+  }
 }

@@ -111,7 +111,7 @@ export interface Canvas {
   id: string;
   project_id: string;
   name: string;
-  order_index: number;
+  order_index?: number;
   created_at?: string;
 }
 

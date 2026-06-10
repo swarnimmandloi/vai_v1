@@ -9,6 +9,7 @@ import {
   BackgroundVariant,
   PanOnScrollMode,
   type NodeTypes,
+  type Node,
   useReactFlow,
   useNodesInitialized,
 } from '@xyflow/react';
@@ -144,6 +145,16 @@ export function CanvasView({ canvasId }: CanvasViewProps) {
     setSelectedFrame(null);
   }, [setSelectedFrame]);
 
+  const handleNodeDragStop = useCallback((_e: React.MouseEvent, node: Node) => {
+    if (node.type !== 'response') return;
+    if (!canvasId || canvasId === 'demo' || !process.env.NEXT_PUBLIC_SUPABASE_URL) return;
+    fetch('/api/files', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: node.id, position_x: node.position.x, position_y: node.position.y }),
+    }).catch(console.error);
+  }, [canvasId]);
+
   return (
     <div className="w-full h-full" style={{ background: 'var(--canvas-bg)' }}>
       <ReactFlow
@@ -154,6 +165,7 @@ export function CanvasView({ canvasId }: CanvasViewProps) {
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         onPaneClick={handlePaneClick}
+        onNodeDragStop={handleNodeDragStop}
         fitView
         fitViewOptions={{ padding: 0.3 }}
         minZoom={0.05}

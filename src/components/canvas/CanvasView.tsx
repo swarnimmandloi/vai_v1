@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef } from 'react';
+import type { MouseEvent as ReactMouseEvent } from 'react';
 import {
   ReactFlow,
   Background,
@@ -71,8 +72,6 @@ export function CanvasView({ canvasId }: CanvasViewProps) {
     }> = [];
 
     newResponses.forEach((responseNode) => {
-      relaidOutRef.current.add(responseNode.id);
-
       const sectionNodes = allNodes.filter(
         (n) => n.type === 'section' && n.parentId === responseNode.id
       );
@@ -83,12 +82,18 @@ export function CanvasView({ canvasId }: CanvasViewProps) {
           (n.parentId === responseNode.id || sectionIdSet.has(n.parentId ?? ''))
       );
 
-      // Collect actual measured heights — skip this response if not yet measured
+      // Collect actual measured heights — skip this response if not yet measured.
+      // NOTE: do NOT add to relaidOutRef before this check — if we bail early the
+      // response must remain eligible so it can retry when nodesInitialized cycles
+      // again (e.g. after a new query adds more nodes).
       const measuredHeights = new Map<string, number>();
       cardNodes.forEach((n) => {
         if (n.measured?.height) measuredHeights.set(n.id, n.measured.height);
       });
       if (measuredHeights.size < cardNodes.length) return;
+
+      // All cards measured — mark as done before computing layout
+      relaidOutRef.current.add(responseNode.id);
 
       const cards = cardNodes.map((n) => (n.data as CardNodeData).card);
       const sections = sectionNodes.map((n) => (n.data as SectionNodeData).section);
@@ -145,7 +150,7 @@ export function CanvasView({ canvasId }: CanvasViewProps) {
     setSelectedFrame(null);
   }, [setSelectedFrame]);
 
-  const handleNodeDragStop = useCallback((_e: React.MouseEvent, node: Node) => {
+  const handleNodeDragStop = useCallback((_e: ReactMouseEvent, node: Node) => {
     if (node.type !== 'response') return;
     if (!canvasId || canvasId === 'demo' || !process.env.NEXT_PUBLIC_SUPABASE_URL) return;
     fetch('/api/files', {

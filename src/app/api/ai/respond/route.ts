@@ -3,6 +3,8 @@ import { SYSTEM_PROMPT, buildUserMessage } from '@/lib/ai/prompts';
 import { normalizeCardGraph } from '@/lib/ai/normalize';
 import type { AIRequestPayload } from '@/types/ai';
 
+export const maxDuration = 60;
+
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
@@ -36,8 +38,7 @@ export async function POST(req: Request) {
   try {
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-6',
-      max_tokens: 16000,
-      thinking: { type: 'enabled', budget_tokens: 8000 },
+      max_tokens: 8000,
       system: SYSTEM_PROMPT,
       messages: [{ role: 'user', content: messageContent }],
     });

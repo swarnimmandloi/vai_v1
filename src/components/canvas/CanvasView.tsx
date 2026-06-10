@@ -82,15 +82,20 @@ export function CanvasView({ canvasId }: CanvasViewProps) {
           (n.parentId === responseNode.id || sectionIdSet.has(n.parentId ?? ''))
       );
 
-      // Collect actual measured heights — skip this response if not yet measured.
-      // NOTE: do NOT add to relaidOutRef before this check — if we bail early the
-      // response must remain eligible so it can retry when nodesInitialized cycles
-      // again (e.g. after a new query adds more nodes).
+      // Use real measured heights where available, fall back to a default so the
+      // response always renders (never blank). Track whether all heights were real:
+      // if not, don't add to relaidOutRef so the next nodesInitialized cycle retries
+      // with correct measurements.
+      const DEFAULT_H = 120;
+      let allMeasured = cardNodes.length > 0;
       const measuredHeights = new Map<string, number>();
       cardNodes.forEach((n) => {
-        if (n.measured?.height) measuredHeights.set(n.id, n.measured.height);
+        const h = n.measured?.height;
+        if (h) { measuredHeights.set(n.id, h); }
+        else { measuredHeights.set(n.id, DEFAULT_H); allMeasured = false; }
       });
-      if (measuredHeights.size < cardNodes.length) return;
+
+      if (allMeasured) relaidOutRef.current.add(responseNode.id);
 
       // All cards measured — mark as done before computing layout
       relaidOutRef.current.add(responseNode.id);

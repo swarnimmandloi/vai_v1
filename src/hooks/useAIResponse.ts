@@ -19,7 +19,6 @@ export function useAIResponse() {
     addResponseGraph,
     addLoadingNode,
     removeLoadingNode,
-    getNextFramePosition,
     setSelectedFrame,
     canvasId,
     nodes,
@@ -34,7 +33,7 @@ export function useAIResponse() {
       addUserMessage(question);
 
       const responseId = generateId();
-      const clusterOffset = getMeasuredNextPosition(getNodes(), selectedFrameId ?? undefined);
+      const clusterOffset = getMeasuredNextPosition(getNodes());
       const tempId = `loading-${generateId()}`;
       addLoadingNode(tempId, clusterOffset);
       setStreaming(true, tempId);
@@ -182,47 +181,27 @@ export function useAIResponse() {
 import type { Node } from '@xyflow/react';
 
 /**
- * Calculate the position for the next response using React Flow's
- * actual measured node dimensions (post-relayout), not Dagre estimates.
- * This prevents overlap when the relayout makes a response wider than estimated.
+ * Always place the next response to the right of the rightmost existing response,
+ * using React Flow's measured widths (post-relayout) so there's never overlap.
+ * The dashed edge from parent → child already shows branching visually.
  */
-function getMeasuredNextPosition(
-  allNodes: Node[],
-  selectedNodeId?: string
-): { x: number; y: number } {
-  const GAP = 160;
+function getMeasuredNextPosition(allNodes: Node[]): { x: number; y: number } {
+  const GAP = 200;
   const DEFAULT_WIDTH = 700;
   const responseNodes = allNodes.filter((n) => n.type === 'response');
 
-  // Width of a response = measured width (post-relayout) > style.width (Dagre estimate) > default
-  const responseWidth = (n: Node) =>
+  if (responseNodes.length === 0) return { x: 100, y: 100 };
+
+  const nodeWidth = (n: Node) =>
     (n.measured?.width as number | undefined) ??
     (n.style?.width as number | undefined) ??
     DEFAULT_WIDTH;
 
-  // If a specific node is selected, branch from its response cluster
-  if (selectedNodeId) {
-    const sel = allNodes.find((n) => n.id === selectedNodeId);
-    let responseNode: Node | undefined;
-    if (sel?.type === 'response') {
-      responseNode = sel;
-    } else if (sel?.parentId) {
-      const parent = allNodes.find((n) => n.id === sel.parentId);
-      if (parent?.type === 'response') responseNode = parent;
-      else if (parent?.parentId)
-        responseNode = allNodes.find((n) => n.id === parent.parentId && n.type === 'response');
-    }
-    if (responseNode) {
-      return { x: responseNode.position.x + responseWidth(responseNode) + GAP, y: responseNode.position.y };
-    }
-  }
+  const rightmost = responseNodes.reduce((max, n) =>
+    n.position.x + nodeWidth(n) > max.position.x + nodeWidth(max) ? n : max
+  );
 
-  if (responseNodes.length === 0) return { x: 100, y: 100 };
-
-  const rightmost = responseNodes.reduce((max, n) => {
-    return n.position.x + responseWidth(n) > max.position.x + responseWidth(max) ? n : max;
-  });
-  return { x: rightmost.position.x + responseWidth(rightmost) + GAP, y: 100 };
+  return { x: rightmost.position.x + nodeWidth(rightmost) + GAP, y: 100 };
 }
 
 async function persistFile(

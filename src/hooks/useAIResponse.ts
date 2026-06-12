@@ -36,31 +36,8 @@ export function useAIResponse() {
       const { selectedFrameId, nodes, canvasId } = useCanvasStore.getState();
 
       const responseId = generateId();
-      const pendingPos = useCanvasStore.getState().pendingExpansionPosition;
-      if (pendingPos) useCanvasStore.getState().setPendingExpansionPosition(null);
-      const rawOffset = pendingPos ?? getMeasuredNextPosition(getNodes());
-      // Use store nodes (always in sync) rather than getNodes() for collision check
-      const storeNodes = useCanvasStore.getState().nodes;
-      const clusterOffset = pendingPos?.direction
-        ? findFreePosition(rawOffset, pendingPos.direction, storeNodes)
-        : rawOffset;
-      console.log('[VAI] branch placement — pendingPos:', pendingPos, '→ clusterOffset:', clusterOffset);
-      const tempId = `loading-${generateId()}`;
-      addLoadingNode(tempId, clusterOffset);
-      setStreaming(true, tempId);
 
-      const canvasContext = getCanvasSummary();
-      const threadHistory = getThreadHistory();
-
-      const selectedNode = selectedFrameId ? nodes.find((n) => n.id === selectedFrameId) : null;
-      const selectedCardHeading = selectedNode
-        ? ((selectedNode.data as { card?: { heading: string } })?.card?.heading ??
-           (selectedNode.data as { topic?: string })?.topic ??
-           (selectedNode.data as { frame?: { title: string } })?.frame?.title ??
-           null)
-        : null;
-
-      // Resolve the parent response node id for branching
+      // Resolve parentResponseId first — position depends on it.
       let parentResponseId: string | undefined;
       if (selectedFrameId) {
         const sel = nodes.find((n) => n.id === selectedFrameId);
@@ -75,15 +52,56 @@ export function useAIResponse() {
           }
         }
       }
-
-      // Every new response chains to the previous one — the connecting line
-      // between mind maps is core to the canvas story (per Figma design).
       if (!parentResponseId) {
         const responseNodes = nodes.filter((n) => n.type === 'response');
         if (responseNodes.length > 0) {
           parentResponseId = responseNodes[responseNodes.length - 1].id;
         }
       }
+
+      // Determine placement position.
+      // Priority: explicit dot position → branch-adjacent-to-parent → tail of chain.
+      const pendingPos = useCanvasStore.getState().pendingExpansionPosition;
+      if (pendingPos) useCanvasStore.getState().setPendingExpansionPosition(null);
+
+      const allResponseNodes = nodes.filter((n) => n.type === 'response');
+      const parentIsChainTail = !parentResponseId || allResponseNodes.at(-1)?.id === parentResponseId;
+
+      let clusterOffset: { x: number; y: number };
+      if (pendingPos) {
+        // Explicit dot click — respect direction, avoid overlap.
+        const ideal = { x: pendingPos.x, y: pendingPos.y };
+        clusterOffset = pendingPos.direction
+          ? findFreePosition(ideal, pendingPos.direction, nodes)
+          : ideal;
+      } else if (!parentIsChainTail && parentResponseId) {
+        // Branching from an earlier frame via chat or card — place adjacent, not at far right.
+        const parentNode = nodes.find((n) => n.id === parentResponseId);
+        if (parentNode) {
+          const pw = (parentNode.style?.width as number | undefined) ?? 700;
+          const ideal = { x: parentNode.position.x + pw + 160, y: parentNode.position.y };
+          clusterOffset = findFreePosition(ideal, 'right', nodes);
+        } else {
+          clusterOffset = getMeasuredNextPosition(getNodes());
+        }
+      } else {
+        clusterOffset = getMeasuredNextPosition(getNodes());
+      }
+
+      const tempId = `loading-${generateId()}`;
+      addLoadingNode(tempId, clusterOffset);
+      setStreaming(true, tempId);
+
+      const canvasContext = getCanvasSummary();
+      const threadHistory = getThreadHistory();
+
+      const selectedNode = selectedFrameId ? nodes.find((n) => n.id === selectedFrameId) : null;
+      const selectedCardHeading = selectedNode
+        ? ((selectedNode.data as { card?: { heading: string } })?.card?.heading ??
+           (selectedNode.data as { topic?: string })?.topic ??
+           (selectedNode.data as { frame?: { title: string } })?.frame?.title ??
+           null)
+        : null;
 
       try {
         const response = await fetch('/api/ai/respond', {

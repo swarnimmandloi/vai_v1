@@ -11,11 +11,16 @@ export interface ResponseNodeData extends Record<string, unknown> {
 type Direction = 'top' | 'right' | 'bottom' | 'left';
 
 const DOT_POSITIONS: Record<Direction, React.CSSProperties> = {
-  top:    { top: -7,  left: '50%', transform: 'translateX(-50%)' },
-  right:  { right: -7, top: '50%', transform: 'translateY(-50%)' },
-  bottom: { bottom: -7, left: '50%', transform: 'translateX(-50%)' },
-  left:   { left: -7,  top: '50%', transform: 'translateY(-50%)' },
+  top:    { top: -8,   left: '50%', transform: 'translateX(-50%)' },
+  right:  { right: -8, top: '50%',  transform: 'translateY(-50%)' },
+  bottom: { bottom: -8, left: '50%', transform: 'translateX(-50%)' },
+  left:   { left: -8,  top: '50%',  transform: 'translateY(-50%)' },
 };
+
+function stopAll(e: React.SyntheticEvent) {
+  e.stopPropagation();
+  e.preventDefault();
+}
 
 export const ResponseNode = memo(function ResponseNode({
   data,
@@ -23,22 +28,12 @@ export const ResponseNode = memo(function ResponseNode({
   selected,
 }: NodeProps<Node<ResponseNodeData>>) {
   const { topic } = data;
-  const [followUpText, setFollowUpText] = useState('');
   const [isHovered, setIsHovered] = useState(false);
   const setSelectedFrame = useCanvasStore((s) => s.setSelectedFrame);
 
-  function handleFollowUp(e: React.FormEvent) {
-    e.preventDefault();
-    if (!followUpText.trim()) return;
-    setSelectedFrame(id);
-    window.dispatchEvent(
-      new CustomEvent('vai:follow-up', { detail: { question: followUpText, frameId: id } })
-    );
-    setFollowUpText('');
-  }
-
   function handleDotClick(e: React.MouseEvent, direction: Direction) {
     e.stopPropagation();
+    e.preventDefault();
     const { nodes, setSelectedFrame: sel, setPendingExpansionPosition, setPendingResponseDot } = useCanvasStore.getState();
     const node = nodes.find((n) => n.id === id);
     if (!node) return;
@@ -48,15 +43,22 @@ export const ResponseNode = memo(function ResponseNode({
     const GAP = 160;
 
     const positions: Record<Direction, { x: number; y: number }> = {
-      right:  { x: node.position.x + w + GAP,     y: node.position.y },
-      left:   { x: node.position.x - w - GAP,     y: node.position.y },
-      bottom: { x: node.position.x,               y: node.position.y + h + GAP },
-      top:    { x: node.position.x,               y: node.position.y - h - GAP },
+      right:  { x: node.position.x + w + GAP, y: node.position.y },
+      left:   { x: node.position.x - w - GAP, y: node.position.y },
+      bottom: { x: node.position.x,            y: node.position.y + h + GAP },
+      top:    { x: node.position.x,            y: node.position.y - h - GAP },
     };
 
     sel(id);
     setPendingExpansionPosition(positions[direction]);
     setPendingResponseDot({ responseId: id, direction });
+  }
+
+  function handleAskClick(e: React.MouseEvent) {
+    e.stopPropagation();
+    e.preventDefault();
+    setSelectedFrame(id);
+    useCanvasStore.getState().setPendingResponseDot({ responseId: id, direction: 'top' });
   }
 
   return (
@@ -66,11 +68,12 @@ export const ResponseNode = memo(function ResponseNode({
       onMouseLeave={() => setIsHovered(false)}
       onClick={() => setSelectedFrame(id)}
     >
-      {/* 4 expansion dots — always visible so users can discover branching */}
+      {/* 4 directional expansion dots */}
       {(['top', 'right', 'bottom', 'left'] as Direction[]).map((dir) => (
         <div
           key={dir}
-          onMouseDown={(e) => e.stopPropagation()}
+          onMouseDown={stopAll}
+          onPointerDown={stopAll}
           onClick={(e) => handleDotClick(e, dir)}
           style={{
             position: 'absolute',
@@ -78,23 +81,25 @@ export const ResponseNode = memo(function ResponseNode({
             width: 16,
             height: 16,
             borderRadius: '50%',
-            background: isHovered || selected ? '#818cf8' : 'rgba(99,102,241,0.35)',
+            background: isHovered || selected ? '#818cf8' : 'rgba(99,102,241,0.3)',
             border: '2.5px solid #0f172a',
             cursor: 'pointer',
             zIndex: 20,
             transition: 'transform 0.12s, background 0.15s',
             boxShadow: isHovered || selected
-              ? '0 0 0 3px rgba(129,140,248,0.35)'
-              : '0 0 0 2px rgba(99,102,241,0.15)',
+              ? '0 0 0 3px rgba(129,140,248,0.3)'
+              : '0 0 0 1px rgba(99,102,241,0.15)',
           }}
           onMouseEnter={(e) => {
-            (e.currentTarget as HTMLDivElement).style.transform =
-              DOT_POSITIONS[dir].transform?.toString().replace(')', '') + ' scale(1.35)' || 'scale(1.35)';
-            (e.currentTarget as HTMLDivElement).style.background = '#a5b4fc';
+            const el = e.currentTarget as HTMLDivElement;
+            const base = DOT_POSITIONS[dir].transform as string ?? '';
+            el.style.transform = base.replace(')', '') + (base.includes('(') ? ' scale(1.35)' : 'scale(1.35)');
+            el.style.background = '#a5b4fc';
           }}
           onMouseLeave={(e) => {
-            (e.currentTarget as HTMLDivElement).style.transform = DOT_POSITIONS[dir].transform as string ?? '';
-            (e.currentTarget as HTMLDivElement).style.background = isHovered || selected ? '#818cf8' : 'rgba(99,102,241,0.35)';
+            const el = e.currentTarget as HTMLDivElement;
+            el.style.transform = DOT_POSITIONS[dir].transform as string ?? '';
+            el.style.background = isHovered || selected ? '#818cf8' : 'rgba(99,102,241,0.3)';
           }}
         />
       ))}
@@ -118,10 +123,10 @@ export const ResponseNode = memo(function ResponseNode({
           transition: 'border-color 0.15s, box-shadow 0.15s',
         }}
       >
-        {/* Topic header */}
+        {/* Header: topic label + ask button */}
         <div
           style={{
-            padding: '10px 16px',
+            padding: '10px 12px 10px 16px',
             borderBottom: '1px solid rgba(99,102,241,0.15)',
             display: 'flex',
             alignItems: 'center',
@@ -140,6 +145,7 @@ export const ResponseNode = memo(function ResponseNode({
           />
           <span
             style={{
+              flex: 1,
               fontSize: 12,
               fontWeight: 600,
               color: selected ? '#a5b4fc' : '#64748b',
@@ -148,41 +154,37 @@ export const ResponseNode = memo(function ResponseNode({
           >
             {topic}
           </span>
+
+          {/* Ask follow-up button — top-right corner */}
+          <div
+            onMouseDown={stopAll}
+            onPointerDown={stopAll}
+            onClick={handleAskClick}
+            title="Ask a follow-up"
+            style={{
+              width: 22,
+              height: 22,
+              borderRadius: 6,
+              background: isHovered || selected ? 'rgba(99,102,241,0.18)' : 'rgba(99,102,241,0.08)',
+              border: '1px solid rgba(99,102,241,0.25)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+              transition: 'background 0.15s',
+              color: '#818cf8',
+              fontSize: 14,
+              lineHeight: 1,
+              userSelect: 'none',
+            }}
+          >
+            +
+          </div>
         </div>
 
         {/* Spacer — cards and sections fill this area */}
         <div style={{ flex: 1 }} />
-
-        {/* Follow-up input at bottom */}
-        <div
-          style={{
-            padding: '8px 12px',
-            borderTop: '1px solid rgba(99,102,241,0.12)',
-            flexShrink: 0,
-          }}
-          onMouseDown={(e) => e.stopPropagation()}
-        >
-          <form onSubmit={handleFollowUp} className="flex items-center gap-2">
-            <input
-              type="text"
-              value={followUpText}
-              onChange={(e) => setFollowUpText(e.target.value)}
-              placeholder="Ask a follow-up about this response..."
-              className="flex-1 text-xs bg-transparent outline-none placeholder:opacity-30"
-              style={{ color: 'var(--foreground)' }}
-              onFocus={() => setSelectedFrame(id)}
-            />
-            {followUpText && (
-              <button
-                type="submit"
-                className="text-xs px-2 py-0.5 rounded cursor-pointer shrink-0"
-                style={{ background: 'var(--accent)', color: 'white' }}
-              >
-                Ask
-              </button>
-            )}
-          </form>
-        </div>
       </div>
     </div>
   );

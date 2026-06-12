@@ -126,6 +126,12 @@ export function useCardExpansion() {
           label: c.label,
         }));
 
+        // If this was an action card click, draw a connection from it to the first new card
+        const sourceCard = (nodes.find((n) => n.id === cardNodeId)?.data as CardNodeData | undefined)?.card;
+        if (sourceCard?.type === 'action' && newPrefixedCards.length > 0) {
+          newEdges.push({ from: cardNodeId, to: newPrefixedCards[0].id, label: undefined });
+        }
+
         // 7. Build full merged arrays for layout (all IDs are store IDs)
         const existingPrefixedSections: KnowledgeSection[] = rawSections.map((s) => ({
           ...s,

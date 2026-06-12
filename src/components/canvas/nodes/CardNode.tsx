@@ -55,6 +55,7 @@ export const CardNode = memo(function CardNode({
         onMouseEnter={(e) => { if (!isExpanding) { e.currentTarget.style.background = 'rgba(20,184,166,0.16)'; e.currentTarget.style.borderColor = 'rgba(20,184,166,0.5)'; } }}
         onMouseLeave={(e) => { if (!isExpanding) { e.currentTarget.style.background = 'rgba(20,184,166,0.08)'; e.currentTarget.style.borderColor = 'rgba(20,184,166,0.25)'; } }}
       >
+        <Handle type="source" position={Position.Right} style={{ ...handleStyle, opacity: 0 }} />
         <span style={{ fontSize: 13, fontWeight: 500, color: '#99f6e4', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {card.heading}
         </span>

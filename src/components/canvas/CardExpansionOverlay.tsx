@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { useReactFlow, useViewport, useInternalNode } from '@xyflow/react';
+import { useViewport, useInternalNode } from '@xyflow/react';
 import { useCanvasStore } from '@/store/canvasStore';
 import { useCardExpansion } from '@/hooks/useCardExpansion';
 import { estimatedCardHeight, CARD_W } from '@/lib/canvas/layoutHierarchy';
@@ -11,28 +11,45 @@ export function CardExpansionOverlay() {
   const selectedFrameId = useCanvasStore((s) => s.selectedFrameId);
   const nodes = useCanvasStore((s) => s.nodes);
   const { expand, isExpanding } = useCardExpansion();
-  // useViewport() is React Flow's own reactive hook — always reflects the live
-  // viewport, including the initial fitView pass. Manual state + useOnViewportChange
-  // misses that first fitView, which caused the overlay to appear at wrong coords.
   const { x: vpX, y: vpY, zoom } = useViewport();
   const [question, setQuestion] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const prevCardIdRef = useRef<string | null>(null);
+  // Persist typed text per card for the session so clicking away doesn't erase work
+  const savedTextRef = useRef<Map<string, string>>(new Map());
 
   const internalNode = useInternalNode(selectedFrameId ?? '');
+  const selectedNode = nodes.find((n) => n.id === selectedFrameId && n.type === 'card');
 
-  const selectedNode = nodes.find(
-    (n) => n.id === selectedFrameId && n.type === 'card',
-  );
+  // Save current text to the per-card map on every keystroke
+  useEffect(() => {
+    if (selectedNode) {
+      savedTextRef.current.set(selectedNode.id, question);
+    }
+  }, [question, selectedNode]);
 
-  // Clear input and focus when switching to a new card
+  // When a new card is selected, restore its saved text and focus
   useEffect(() => {
     if (selectedNode && selectedNode.id !== prevCardIdRef.current) {
-      setQuestion('');
+      const saved = savedTextRef.current.get(selectedNode.id) ?? '';
+      setQuestion(saved);
       prevCardIdRef.current = selectedNode.id;
       setTimeout(() => inputRef.current?.focus(), 50);
     }
     if (!selectedNode) prevCardIdRef.current = null;
+  }, [selectedNode]);
+
+  // Dismiss when clicking outside the overlay
+  useEffect(() => {
+    if (!selectedNode) return;
+    function onMouseDown(e: MouseEvent) {
+      const overlay = document.getElementById('card-expansion-overlay');
+      if (overlay && !overlay.contains(e.target as globalThis.Node)) {
+        useCanvasStore.getState().setSelectedFrame(null);
+      }
+    }
+    document.addEventListener('mousedown', onMouseDown);
+    return () => document.removeEventListener('mousedown', onMouseDown);
   }, [selectedNode]);
 
   // Dismiss on Escape
@@ -49,10 +66,7 @@ export function CardExpansionOverlay() {
   if (!selectedNode) return null;
 
   const card = (selectedNode.data as CardNodeData).card;
-
-  // Use React Flow's own absolute position to avoid manual parent-chain math.
   const absPos = internalNode?.internals.positionAbsolute ?? { x: 0, y: 0 };
-
   const screenX = absPos.x * zoom + vpX;
   const screenY = absPos.y * zoom + vpY;
   const cardHeightPx = (internalNode?.measured?.height ?? estimatedCardHeight(card)) * zoom;
@@ -62,11 +76,13 @@ export function CardExpansionOverlay() {
     if (!question.trim() || isExpanding) return;
     const q = question;
     setQuestion('');
+    savedTextRef.current.delete(selectedNode!.id);
     await expand(selectedNode!.id, q);
   }
 
   return (
     <div
+      id="card-expansion-overlay"
       style={{
         position: 'absolute',
         left: screenX,
@@ -86,9 +102,7 @@ export function CardExpansionOverlay() {
       onMouseDown={(e) => e.stopPropagation()}
     >
       {isExpanding ? (
-        <span style={{ fontSize: 12, color: 'var(--muted-fg)', flex: 1 }}>
-          Expanding…
-        </span>
+        <span style={{ fontSize: 12, color: 'var(--muted-fg)', flex: 1 }}>Expanding…</span>
       ) : (
         <form
           onSubmit={handleSubmit}

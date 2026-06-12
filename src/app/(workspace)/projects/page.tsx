@@ -2,30 +2,28 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
-import { Plus, Layers } from 'lucide-react';
-import { generateId } from '@/lib/utils';
+import { Plus } from 'lucide-react';
+import { createProjectAction } from '../actions';
 
 export default function ProjectsPage() {
   const router = useRouter();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   async function createFirstProject() {
-    const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      router.push('/login');
+    setLoading(true);
+    setError('');
+    const result = await createProjectAction();
+    if ('error' in result && result.error) {
+      setError(result.error);
+      setLoading(false);
       return;
     }
-
-    const projectId = generateId();
-    const canvasId = generateId();
-
-    await supabase.from('projects').insert({ id: projectId, user_id: user.id, name: 'My Workspace' });
-    await supabase.from('canvases').insert({ id: canvasId, project_id: projectId, name: 'Canvas 1' });
-
-    router.push(`/${projectId}/canvas/${canvasId}`);
+    if ('projectId' in result && result.projectId && result.canvasId) {
+      router.push(`/${result.projectId}/canvas/${result.canvasId}`);
+    }
   }
 
   return (
@@ -46,13 +44,21 @@ export default function ProjectsPage() {
         <p className="text-sm mb-8" style={{ color: 'var(--muted-fg)' }}>
           Your AI workspace where ideas become interactive visual maps.
         </p>
+
+        {error && (
+          <p className="text-xs mb-4 px-3 py-2 rounded-lg" style={{ color: '#e53e3e', background: 'rgba(229,62,62,0.08)', border: '1px solid rgba(229,62,62,0.2)' }}>
+            {error}
+          </p>
+        )}
+
         <button
           onClick={createFirstProject}
-          className="flex items-center gap-2 mx-auto px-5 py-2.5 rounded-lg text-sm font-medium text-white transition-opacity hover:opacity-90"
+          disabled={loading}
+          className="flex items-center gap-2 mx-auto px-5 py-2.5 rounded-lg text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
           style={{ background: 'var(--accent)' }}
         >
           <Plus size={16} />
-          Create your first workspace
+          {loading ? 'Creating…' : 'Create your first workspace'}
         </button>
       </div>
     </div>

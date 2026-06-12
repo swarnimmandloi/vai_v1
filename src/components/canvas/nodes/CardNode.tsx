@@ -1,10 +1,12 @@
 'use client';
 
 import { memo, useState } from 'react';
+import { ChevronRight, Loader2 } from 'lucide-react';
 import { Handle, Position, type NodeProps, type Node } from '@xyflow/react';
 import ReactMarkdown from 'react-markdown';
 import type { CardNodeData } from '@/store/canvasStore';
 import { useCanvasStore } from '@/store/canvasStore';
+import { useCardExpansion } from '@/hooks/useCardExpansion';
 
 function stableHash(str: string): number {
   let h = 5381;
@@ -26,24 +28,50 @@ export const CardNode = memo(function CardNode({
   selected,
 }: NodeProps<Node<CardNodeData>>) {
   const { card } = data;
-  const [followUpText, setFollowUpText] = useState('');
   const [imgLoaded, setImgLoaded] = useState(false);
-  const [imgError, setImgError] = useState(false);
   const setSelectedFrame = useCanvasStore((s) => s.setSelectedFrame);
+  const { expand, isExpanding } = useCardExpansion();
+
+  if (card.type === 'action') {
+    return (
+      <div
+        onClick={(e) => { e.stopPropagation(); if (!isExpanding) expand(id, card.question ?? card.heading); }}
+        onMouseDown={(e) => e.stopPropagation()}
+        style={{
+          width: 240,
+          height: '100%',
+          background: isExpanding ? 'rgba(20,184,166,0.12)' : 'rgba(20,184,166,0.08)',
+          border: `1px solid ${isExpanding ? 'rgba(20,184,166,0.5)' : 'rgba(20,184,166,0.25)'}`,
+          borderRadius: 10,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '0 14px',
+          cursor: isExpanding ? 'wait' : 'pointer',
+          gap: 8,
+          transition: 'background 0.15s, border-color 0.15s',
+          boxSizing: 'border-box',
+        }}
+        onMouseEnter={(e) => { if (!isExpanding) { e.currentTarget.style.background = 'rgba(20,184,166,0.16)'; e.currentTarget.style.borderColor = 'rgba(20,184,166,0.5)'; } }}
+        onMouseLeave={(e) => { if (!isExpanding) { e.currentTarget.style.background = 'rgba(20,184,166,0.08)'; e.currentTarget.style.borderColor = 'rgba(20,184,166,0.25)'; } }}
+      >
+        <Handle type="source" position={Position.Right} style={{ ...handleStyle, opacity: 0 }} />
+        <span style={{ fontSize: 13, fontWeight: 500, color: '#99f6e4', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {card.heading}
+        </span>
+        {isExpanding
+          ? <Loader2 size={13} style={{ color: '#5eead4', flexShrink: 0, animation: 'spin 1s linear infinite' }} />
+          : <ChevronRight size={14} style={{ color: '#5eead4', flexShrink: 0 }} />
+        }
+      </div>
+    );
+  }
 
   const showImage = !!(card.image_url || card.has_image !== false);
-  const imageUrl = card.image_url
+  const picsumUrl = `https://picsum.photos/seed/${stableHash(card.heading)}/240/140`;
+  const primaryUrl = card.image_url
     ?? `https://image.pollinations.ai/prompt/${encodeURIComponent(card.heading)}?width=240&height=140&nologo=true&seed=${stableHash(card.heading)}`;
-
-  function handleFollowUp(e: React.FormEvent) {
-    e.preventDefault();
-    if (!followUpText.trim()) return;
-    setSelectedFrame(id);
-    window.dispatchEvent(
-      new CustomEvent('vai:follow-up', { detail: { question: followUpText, frameId: id } })
-    );
-    setFollowUpText('');
-  }
+  const [imgSrc, setImgSrc] = useState(primaryUrl);
 
   return (
     <div
@@ -67,7 +95,7 @@ export const CardNode = memo(function CardNode({
         }}
       >
         {/* Image */}
-        {showImage && !imgError && (
+        {showImage && (
           <div
             style={{
               height: 140,
@@ -77,7 +105,7 @@ export const CardNode = memo(function CardNode({
             }}
           >
             <img
-              src={imageUrl}
+              src={imgSrc}
               alt=""
               style={{
                 width: '100%',
@@ -88,7 +116,12 @@ export const CardNode = memo(function CardNode({
               }}
               loading="lazy"
               onLoad={() => setImgLoaded(true)}
-              onError={() => setImgError(true)}
+              onError={() => {
+                if (imgSrc !== picsumUrl) {
+                  setImgSrc(picsumUrl);
+                  setImgLoaded(false);
+                }
+              }}
             />
           </div>
         )}
@@ -123,33 +156,6 @@ export const CardNode = memo(function CardNode({
           </div>
         </div>
 
-        {/* Follow-up input */}
-        <div
-          className="px-3 py-2"
-          style={{ borderTop: '1px solid var(--border)' }}
-          onMouseDown={(e) => e.stopPropagation()}
-        >
-          <form onSubmit={handleFollowUp} className="flex items-center gap-2">
-            <input
-              type="text"
-              value={followUpText}
-              onChange={(e) => setFollowUpText(e.target.value)}
-              placeholder="Ask about this..."
-              className="flex-1 text-xs bg-transparent outline-none placeholder:opacity-40"
-              style={{ color: 'var(--foreground)' }}
-              onFocus={() => setSelectedFrame(id)}
-            />
-            {followUpText && (
-              <button
-                type="submit"
-                className="text-xs px-2 py-0.5 rounded cursor-pointer shrink-0"
-                style={{ background: 'var(--accent)', color: 'white' }}
-              >
-                Ask
-              </button>
-            )}
-          </form>
-        </div>
       </div>
     </div>
   );

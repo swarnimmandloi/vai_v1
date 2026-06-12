@@ -8,7 +8,7 @@
   "cards": [
     {
       "id": "c1",
-      "heading": "Neuron (Node)",
+      "heading": "Neuron (Swarnim)",
       "body": "The basic unit. Takes in numbers, multiplies each by a **weight**, sums them up, adds a **bias**, then passes the result through an activation function.",
       "section": "sec1",
       "has_image": true
@@ -22,7 +22,7 @@
     },
     {
       "id": "c3",
-      "heading": "Activation Function",
+      "heading": "Swarnim is awesome",
       "body": "Adds non-linearity so the network can learn complex patterns. Common choices: *ReLU* (max(0, x)), *sigmoid* (0–1 output), *softmax* (probabilities that sum to 1).",
       "section": "sec1",
       "has_image": false

@@ -10,8 +10,9 @@ import { useAIResponse } from '@/hooks/useAIResponse';
 import { CanvasView } from '@/components/canvas/CanvasView';
 import { ChatPanel } from '@/components/chat/ChatPanel';
 import { FirstVisitOverlay } from '@/components/first-visit/FirstVisitOverlay';
-import { createClient } from '@/lib/supabase/client';
-import type { Frame, Block } from '@/types/canvas';
+import { useChatStore } from '@/store/chatStore';
+import { normalizeCardGraph } from '@/lib/ai/normalize';
+import { layoutHierarchy, prefixResponseIds } from '@/lib/canvas/layoutHierarchy';
 
 interface PageProps {
   params: Promise<{ projectId: string; canvasId: string }>;
@@ -19,7 +20,8 @@ interface PageProps {
 
 function CanvasPageInner({ canvasId }: { canvasId: string }) {
   const { hasSubmittedFirstQuestion, setFirstVisitComplete } = useUIStore();
-  const { loadFrames, clearCanvas } = useCanvasStore();
+  const { addResponseGraph, clearCanvas } = useCanvasStore();
+  const { commitAIMessage } = useChatStore();
   const { submit } = useAIResponse();
   const [loaded, setLoaded] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -43,40 +45,30 @@ function CanvasPageInner({ canvasId }: { canvasId: string }) {
   }, [canvasId]);
 
   async function loadCanvasData() {
-    const supabase = createClient();
-    const { data: frames } = await supabase
-      .from('frames')
-      .select('*, blocks(*)')
-      .eq('canvas_id', canvasId)
-      .order('created_at', { ascending: true });
+    const res = await fetch(`/api/files?canvasId=${canvasId}`);
+    const { files } = res.ok ? await res.json() : { files: [] };
 
-    const { data: connections } = await supabase
-      .from('connections')
-      .select('*')
-      .eq('canvas_id', canvasId);
-
-    if (frames && frames.length > 0) {
-      const mappedFrames: Frame[] = frames.map((f) => ({
-        id: f.id,
-        canvas_id: f.canvas_id,
-        title: f.title,
-        position: { x: f.position_x, y: f.position_y },
-        width: f.width,
-        layout_type: f.layout_type,
-        parent_id: f.parent_id,
-        thread_id: f.thread_id,
-        blocks: (f.blocks ?? [])
-          .sort((a: Block, b: Block) => a.order_index - b.order_index)
-          .map((b: Block) => ({
-            id: b.id,
-            frame_id: b.frame_id,
-            block_type: b.block_type,
-            order_index: b.order_index,
-            content: b.content,
-          })),
-      }));
-
-      loadFrames(mappedFrames, connections ?? []);
+    if (files && files.length > 0) {
+      const isMobile = window.innerWidth < 768;
+      for (const file of files) {
+        const normalized = normalizeCardGraph(file.content);
+        const { sections, cards, connections } =
+          prefixResponseIds(file.id, normalized.sections, normalized.cards, normalized.connections ?? []);
+        const { positionedSections, positionedCards, responseWidth, responseHeight } =
+          layoutHierarchy(file.id, sections, cards, connections, undefined, isMobile ? 'TB' : 'LR');
+        addResponseGraph(
+          file.id,
+          normalized.topic,
+          positionedSections,
+          positionedCards,
+          connections,
+          { x: file.position_x, y: file.position_y },
+          responseWidth,
+          responseHeight,
+          file.content.parent_response_id
+        );
+        commitAIMessage(normalized.chat_summary ?? '', file.id);
+      }
       setFirstVisitComplete();
     }
 

@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import { PreviewAutoLogin } from '@/components/PreviewAutoLogin';
 
 export const metadata: Metadata = {
   title: 'VAI — Visual AI Workspace',
@@ -13,7 +14,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="h-full">
-      <body className="h-full antialiased">{children}</body>
+      <body className="h-full antialiased">
+        <PreviewAutoLogin />
+        {children}
+      </body>
     </html>
   );
 }

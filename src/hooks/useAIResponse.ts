@@ -1,26 +1,25 @@
 'use client';
 
 import { useCallback } from 'react';
+import { useReactFlow } from '@xyflow/react';
 import { useCanvasStore } from '@/store/canvasStore';
 import { useChatStore } from '@/store/chatStore';
 import { useUIStore } from '@/store/uiStore';
 import { useCanvasContext } from './useCanvasContext';
 import type { KnowledgeCard, KnowledgeSection } from '@/types/canvas';
 import { generateId } from '@/lib/utils';
-import { createClient } from '@/lib/supabase/client';
-import { layoutHierarchy, CARD_W } from '@/lib/canvas/layoutHierarchy';
+import { layoutHierarchy, prefixResponseIds } from '@/lib/canvas/layoutHierarchy';
 import { saveRecentCanvas } from '@/lib/recentCanvases';
+import { slugify } from '@/lib/utils';
 
 export function useAIResponse() {
-  const { getCanvasSummary, getThreadHistory, selectedFrameId } = useCanvasContext();
+  const { getCanvasSummary, getThreadHistory } = useCanvasContext();
+  const { getNodes } = useReactFlow();
   const {
     addResponseGraph,
     addLoadingNode,
     removeLoadingNode,
-    getNextFramePosition,
     setSelectedFrame,
-    canvasId,
-    nodes,
   } = useCanvasStore();
   const { addUserMessage, setStreaming, commitAIMessage, clearStreaming } = useChatStore();
   const { setFirstVisitComplete } = useUIStore();
@@ -31,24 +30,14 @@ export function useAIResponse() {
       setFirstVisitComplete();
       addUserMessage(question);
 
+      // Read selectedFrameId and nodes fresh from store at submission time.
+      // The vai:follow-up event fires synchronously after setSelectedFrame(),
+      // so the React closure would have a stale value.
+      const { selectedFrameId, nodes, canvasId } = useCanvasStore.getState();
+
       const responseId = generateId();
-      const clusterOffset = getNextFramePosition(selectedFrameId ?? undefined);
-      const tempId = `loading-${generateId()}`;
-      addLoadingNode(tempId, clusterOffset);
-      setStreaming(true, tempId);
 
-      const canvasContext = getCanvasSummary();
-      const threadHistory = getThreadHistory();
-
-      const selectedNode = selectedFrameId ? nodes.find((n) => n.id === selectedFrameId) : null;
-      const selectedCardHeading = selectedNode
-        ? ((selectedNode.data as { card?: { heading: string } })?.card?.heading ??
-           (selectedNode.data as { topic?: string })?.topic ??
-           (selectedNode.data as { frame?: { title: string } })?.frame?.title ??
-           null)
-        : null;
-
-      // Resolve the parent response node id for branching
+      // Resolve parentResponseId first — position depends on it.
       let parentResponseId: string | undefined;
       if (selectedFrameId) {
         const sel = nodes.find((n) => n.id === selectedFrameId);
@@ -63,6 +52,56 @@ export function useAIResponse() {
           }
         }
       }
+      if (!parentResponseId) {
+        const responseNodes = nodes.filter((n) => n.type === 'response');
+        if (responseNodes.length > 0) {
+          parentResponseId = responseNodes[responseNodes.length - 1].id;
+        }
+      }
+
+      // Determine placement position.
+      // Priority: explicit dot position → branch-adjacent-to-parent → tail of chain.
+      const pendingPos = useCanvasStore.getState().pendingExpansionPosition;
+      if (pendingPos) useCanvasStore.getState().setPendingExpansionPosition(null);
+
+      const allResponseNodes = nodes.filter((n) => n.type === 'response');
+      const parentIsChainTail = !parentResponseId || allResponseNodes.at(-1)?.id === parentResponseId;
+
+      let clusterOffset: { x: number; y: number };
+      if (pendingPos) {
+        // Explicit dot click — respect direction, avoid overlap.
+        const ideal = { x: pendingPos.x, y: pendingPos.y };
+        clusterOffset = pendingPos.direction
+          ? findFreePosition(ideal, pendingPos.direction, nodes)
+          : ideal;
+      } else if (!parentIsChainTail && parentResponseId) {
+        // Branching from an earlier frame via chat or card — place adjacent, not at far right.
+        const parentNode = nodes.find((n) => n.id === parentResponseId);
+        if (parentNode) {
+          const pw = (parentNode.style?.width as number | undefined) ?? 700;
+          const ideal = { x: parentNode.position.x + pw + 160, y: parentNode.position.y };
+          clusterOffset = findFreePosition(ideal, 'right', nodes);
+        } else {
+          clusterOffset = getMeasuredNextPosition(getNodes());
+        }
+      } else {
+        clusterOffset = getMeasuredNextPosition(getNodes());
+      }
+
+      const tempId = `loading-${generateId()}`;
+      addLoadingNode(tempId, clusterOffset);
+      setStreaming(true, tempId);
+
+      const canvasContext = getCanvasSummary();
+      const threadHistory = getThreadHistory();
+
+      const selectedNode = selectedFrameId ? nodes.find((n) => n.id === selectedFrameId) : null;
+      const selectedCardHeading = selectedNode
+        ? ((selectedNode.data as { card?: { heading: string } })?.card?.heading ??
+           (selectedNode.data as { topic?: string })?.topic ??
+           (selectedNode.data as { frame?: { title: string } })?.frame?.title ??
+           null)
+        : null;
 
       try {
         const response = await fetch('/api/ai/respond', {
@@ -105,8 +144,10 @@ export function useAIResponse() {
         );
 
         const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+        const { sections: pfxSections, cards: pfxCards, connections: pfxConnections } =
+          prefixResponseIds(responseId, parsed.sections ?? [], parsed.cards, parsed.connections ?? []);
         const { positionedSections, positionedCards, responseWidth, responseHeight } =
-          layoutHierarchy(responseId, parsed.sections ?? [], parsed.cards, parsed.connections ?? [], undefined, isMobile ? 'TB' : 'LR');
+          layoutHierarchy(responseId, pfxSections, pfxCards, pfxConnections, undefined, isMobile ? 'TB' : 'LR');
 
         removeLoadingNode(tempId);
 
@@ -115,7 +156,7 @@ export function useAIResponse() {
           parsed.topic ?? 'Response',
           positionedSections,
           positionedCards,
-          parsed.connections ?? [],
+          pfxConnections,
           clusterOffset,
           responseWidth,
           responseHeight,
@@ -126,9 +167,21 @@ export function useAIResponse() {
         commitAIMessage(parsed.chat_summary, responseId);
         saveRecentCanvas(question, parsed);
 
+        // Dev only: persist to canvas/[slug].json so it survives reloads + shows in Recent
+        if (process.env.NODE_ENV === 'development') {
+          fetch('/api/canvas-save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              filename: `${slugify(parsed.topic)}.json`,
+              content: { ...parsed, question, position: clusterOffset },
+            }),
+          }).catch(console.error);
+        }
+
         const supabaseConfigured = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
         if (canvasId && canvasId !== 'demo' && supabaseConfigured) {
-          persistCards(parsed.cards, positionedCards, canvasId).catch(console.error);
+          persistFile(responseId, canvasId, clusterOffset, parsed, parentResponseId).catch(console.error);
         }
 
         setTimeout(() => {
@@ -144,9 +197,7 @@ export function useAIResponse() {
       }
     },
     [
-      selectedFrameId,
-      canvasId,
-      nodes,
+      getNodes,
       getCanvasSummary,
       getThreadHistory,
       addUserMessage,
@@ -156,7 +207,6 @@ export function useAIResponse() {
       addResponseGraph,
       addLoadingNode,
       removeLoadingNode,
-      getNextFramePosition,
       setSelectedFrame,
       setFirstVisitComplete,
     ]
@@ -165,27 +215,107 @@ export function useAIResponse() {
   return { submit };
 }
 
-async function persistCards(
-  cards: KnowledgeCard[],
-  positionedCards: Array<{ card: KnowledgeCard; position: { x: number; y: number } }>,
-  canvasId: string
+import type { Node } from '@xyflow/react';
+
+function findFreePosition(
+  ideal: { x: number; y: number },
+  direction: string,
+  allNodes: Node[]
+): { x: number; y: number } {
+  const W = 700, H = 500, PAD = 100;
+  const responseNodes = allNodes.filter((n) => n.type === 'response');
+
+  function overlaps(pos: { x: number; y: number }): boolean {
+    return responseNodes.some((n) => {
+      const nw = (n.measured?.width as number | undefined) ?? (n.style?.width as number | undefined) ?? W;
+      const nh = (n.measured?.height as number | undefined) ?? (n.style?.height as number | undefined) ?? H;
+      return (
+        pos.x < n.position.x + nw + PAD &&
+        pos.x + W > n.position.x - PAD &&
+        pos.y < n.position.y + nh + PAD &&
+        pos.y + H > n.position.y - PAD
+      );
+    });
+  }
+
+  if (!overlaps(ideal)) return ideal;
+
+  const isHorizontal = direction === 'right' || direction === 'left';
+  const STEP = (isHorizontal ? H : W) + PAD;
+
+  for (let i = 1; i <= 6; i++) {
+    const a = isHorizontal
+      ? { x: ideal.x, y: ideal.y + STEP * i }
+      : { x: ideal.x + STEP * i, y: ideal.y };
+    if (!overlaps(a)) return a;
+
+    const b = isHorizontal
+      ? { x: ideal.x, y: ideal.y - STEP * i }
+      : { x: ideal.x - STEP * i, y: ideal.y };
+    if (!overlaps(b)) return b;
+  }
+  return ideal;
+}
+
+/**
+ * Always place the next response to the right of the rightmost existing response,
+ * using React Flow's measured widths (post-relayout) so there's never overlap.
+ * The dashed edge from parent → child already shows branching visually.
+ */
+function getMeasuredNextPosition(allNodes: Node[]): { x: number; y: number } {
+  const GAP = 200;
+  const DEFAULT_WIDTH = 700;
+  const responseNodes = allNodes.filter((n) => n.type === 'response');
+
+  if (responseNodes.length === 0) return { x: 100, y: 100 };
+
+  const nodeWidth = (n: Node) =>
+    (n.measured?.width as number | undefined) ??
+    (n.style?.width as number | undefined) ??
+    DEFAULT_WIDTH;
+
+  const rightmost = responseNodes.reduce((max, n) =>
+    n.position.x + nodeWidth(n) > max.position.x + nodeWidth(max) ? n : max
+  );
+
+  return { x: rightmost.position.x + nodeWidth(rightmost) + GAP, y: 100 };
+}
+
+async function persistFile(
+  responseId: string,
+  canvasId: string,
+  position: { x: number; y: number },
+  parsed: {
+    topic: string;
+    chat_summary: string;
+    sections: KnowledgeSection[];
+    cards: KnowledgeCard[];
+    connections: Array<{ from: string; to: string; label?: string }>;
+  },
+  parentResponseId?: string
 ) {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL) return;
-  const supabase = createClient();
 
-  const posMap = new Map(positionedCards.map((p) => [p.card.id, p.position]));
+  const res = await fetch('/api/files', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      id: responseId,
+      canvasId,
+      position,
+      content: {
+        topic: parsed.topic,
+        chat_summary: parsed.chat_summary,
+        sections: parsed.sections ?? [],
+        cards: parsed.cards,
+        connections: parsed.connections ?? [],
+        parent_response_id: parentResponseId,
+      },
+    }),
+  });
 
-  await supabase.from('frames').insert(
-    cards.map((c) => ({
-      id: c.id,
-      canvas_id: canvasId,
-      title: c.heading,
-      position_x: posMap.get(c.id)?.x ?? 0,
-      position_y: posMap.get(c.id)?.y ?? 0,
-      width: CARD_W,
-      layout_type: 'single',
-      parent_id: null,
-      thread_id: generateId(),
-    }))
-  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    console.error('[VAI] persistFile failed:', err);
+  }
 }

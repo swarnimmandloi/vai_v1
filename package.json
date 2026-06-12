@@ -17,6 +17,7 @@
     "@supabase/supabase-js": "^2.103.0",
     "@xyflow/react": "^12.10.2",
     "ai": "^6.0.159",
+    "chokidar": "^5.0.0",
     "clsx": "^2.1.1",
     "framer-motion": "^12.38.0",
     "html-to-image": "^1.11.13",

@@ -3,10 +3,9 @@
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { Plus, FolderOpen, ChevronRight, Layers } from 'lucide-react';
-import { createClient } from '@/lib/supabase/client';
 import { useProjectStore } from '@/store/projectStore';
 import type { Project, Canvas } from '@/types/canvas';
-import { generateId } from '@/lib/utils';
+import { createNewProjectAction, createCanvasAction, loadProjectsAction } from '@/app/(workspace)/actions';
 
 export function Sidebar() {
   const router = useRouter();
@@ -20,70 +19,38 @@ export function Sidebar() {
   }, []);
 
   async function loadProjects() {
-    const supabase = createClient();
-    const { data: projectsData } = await supabase
-      .from('projects')
-      .select('*, canvases(*)')
-      .order('created_at', { ascending: false });
-
-    if (projectsData) {
-      setProjects(projectsData as Project[]);
-      // Auto-expand the first project
-      if (projectsData.length > 0) {
-        setExpandedProjects(new Set([projectsData[0].id]));
-      }
+    const result = await loadProjectsAction();
+    if (result.projects.length > 0) {
+      setProjects(result.projects as Project[]);
+      setExpandedProjects(new Set([result.projects[0].id]));
     }
     setLoading(false);
   }
 
   async function createProject() {
-    const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-
-    const projectId = generateId();
-    const canvasId = generateId();
-
-    const { data: project } = await supabase
-      .from('projects')
-      .insert({ id: projectId, user_id: user.id, name: 'New Project' })
-      .select()
-      .single();
-
-    if (!project) return;
-
-    const { data: canvas } = await supabase
-      .from('canvases')
-      .insert({ id: canvasId, project_id: projectId, name: 'Canvas 1' })
-      .select()
-      .single();
-
-    if (!canvas) return;
-
-    addProject({ ...project, canvases: [canvas] });
-    setExpandedProjects((prev) => new Set([...prev, projectId]));
-    router.push(`/${projectId}/canvas/${canvasId}`);
+    const result = await createNewProjectAction();
+    if ('error' in result && result.error) {
+      console.error('Create project failed:', result.error);
+      return;
+    }
+    if ('project' in result && result.project && result.canvas) {
+      addProject({ ...result.project, canvases: [result.canvas] });
+      setExpandedProjects((prev) => new Set([...prev, result.project.id]));
+      router.push(`/${result.project.id}/canvas/${result.canvas.id}`);
+    }
   }
 
   async function createCanvas(projectId: string) {
-    const supabase = createClient();
-    const existingCanvases = projects.find((p) => p.id === projectId)?.canvases ?? [];
-    const canvasId = generateId();
-
-    const { data: canvas } = await supabase
-      .from('canvases')
-      .insert({
-        id: canvasId,
-        project_id: projectId,
-        name: `Canvas ${existingCanvases.length + 1}`,
-        order_index: existingCanvases.length,
-      })
-      .select()
-      .single();
-
-    if (!canvas) return;
-    addCanvas(canvas as Canvas);
-    router.push(`/${projectId}/canvas/${canvasId}`);
+    const existingCount = projects.find((p) => p.id === projectId)?.canvases?.length ?? 0;
+    const result = await createCanvasAction(projectId, existingCount);
+    if ('error' in result && result.error) {
+      console.error('Create canvas failed:', result.error);
+      return;
+    }
+    if ('canvas' in result && result.canvas) {
+      addCanvas(result.canvas as Canvas);
+      router.push(`/${projectId}/canvas/${result.canvas.id}`);
+    }
   }
 
   function toggleProject(id: string) {

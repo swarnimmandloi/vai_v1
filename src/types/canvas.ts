@@ -6,6 +6,8 @@ export type KnowledgeCard = {
   section?: string;
   has_image?: boolean;
   image_url?: string;  // explicit URL — overrides auto-generation
+  type?: 'action';     // omitted = regular knowledge card
+  question?: string;   // auto-question fired when action card is clicked
 };
 
 export type SectionColor = 'blue' | 'green' | 'purple' | 'orange' | 'teal' | 'red';
@@ -111,7 +113,7 @@ export interface Canvas {
   id: string;
   project_id: string;
   name: string;
-  order_index: number;
+  order_index?: number;
   created_at?: string;
 }
 

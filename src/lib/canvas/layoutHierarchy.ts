@@ -4,6 +4,7 @@ import type { KnowledgeCard, KnowledgeSection } from '@/types/canvas';
 export const CARD_W = 240;
 export const CARD_H_IMAGE = 340;    // conservative: image(140) + long body(~120) + input(~60) + padding(~20)
 export const CARD_H_NO_IMAGE = 210; // conservative: long body(~120) + input(~60) + padding(~30)
+export const CARD_H_ACTION = 52;    // action button: label row only
 export const H_GAP = 60;
 export const V_GAP = 40;
 export const SECTION_PADDING = 40;
@@ -13,6 +14,7 @@ export const RESPONSE_LABEL_H = 44;
 export const RESPONSE_FOOTER_H = 48;
 
 export function estimatedCardHeight(card: KnowledgeCard): number {
+  if (card.type === 'action') return CARD_H_ACTION;
   return card.has_image !== false ? CARD_H_IMAGE : CARD_H_NO_IMAGE;
 }
 
@@ -34,6 +36,20 @@ export interface LayoutResult {
   positionedCards: PositionedCard[];
   responseWidth: number;
   responseHeight: number;
+}
+
+export function prefixResponseIds(
+  responseId: string,
+  sections: KnowledgeSection[],
+  cards: KnowledgeCard[],
+  connections: Array<{ from: string; to: string; label?: string }>,
+) {
+  const p = (id: string) => `${responseId}_${id}`;
+  return {
+    sections: sections.map((s) => ({ ...s, id: p(s.id) })),
+    cards: cards.map((c) => ({ ...c, id: p(c.id), section: c.section ? p(c.section) : undefined })),
+    connections: connections.map((c) => ({ ...c, from: p(c.from), to: p(c.to) })),
+  };
 }
 
 export function layoutHierarchy(

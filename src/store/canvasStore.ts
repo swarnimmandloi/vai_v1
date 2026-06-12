@@ -42,12 +42,16 @@ interface CanvasStore {
   edges: Edge[];
   selectedFrameId: string | null;
   canvasId: string | null;
+  pendingExpansionPosition: { x: number; y: number; direction?: string } | null;
+  pendingResponseDot: { responseId: string; direction: 'top' | 'right' | 'bottom' | 'left' } | null;
 
   onNodesChange: (changes: NodeChange[]) => void;
   onEdgesChange: (changes: EdgeChange[]) => void;
   onConnect: (connection: Connection) => void;
 
   setSelectedFrame: (id: string | null) => void;
+  setPendingExpansionPosition: (pos: { x: number; y: number; direction?: string } | null) => void;
+  setPendingResponseDot: (dot: { responseId: string; direction: 'top' | 'right' | 'bottom' | 'left' } | null) => void;
   addFrame: (frame: Frame, parentId?: string) => void;
   addLoadingNode: (tempId: string, position: { x: number; y: number }) => void;
   removeLoadingNode: (tempId: string) => void;
@@ -85,6 +89,7 @@ interface CanvasStore {
     parentResponseId?: string
   ) => void;
 
+  removeResponseGraph: (responseId: string) => void;
   setCanvasId: (id: string) => void;
   loadFrames: (frames: Frame[], connections: { id: string; source_frame_id: string; target_frame_id: string; label?: string }[]) => void;
   clearCanvas: () => void;
@@ -96,6 +101,14 @@ interface CanvasStore {
     style?: Record<string, unknown>;
     parentId?: string;
   }>) => void;
+
+  addExpansionNodes: (
+    responseId: string,
+    newSections: Array<{ section: KnowledgeSection; position: { x: number; y: number }; width: number; height: number }>,
+    newCards: Array<{ card: KnowledgeCard; position: { x: number; y: number }; parentId: string }>,
+    newEdges: Array<{ from: string; to: string; label?: string }>,
+    updatedResponseDimensions: { width: number; height: number }
+  ) => void;
 }
 
 export const useCanvasStore = create<CanvasStore>()(
@@ -104,6 +117,8 @@ export const useCanvasStore = create<CanvasStore>()(
     edges: [],
     selectedFrameId: null,
     canvasId: null,
+    pendingExpansionPosition: null,
+    pendingResponseDot: null,
 
     onNodesChange: (changes) =>
       set((s) => {
@@ -121,6 +136,8 @@ export const useCanvasStore = create<CanvasStore>()(
       }),
 
     setSelectedFrame: (id) => set((s) => { s.selectedFrameId = id; }),
+    setPendingExpansionPosition: (pos) => set((s) => { s.pendingExpansionPosition = pos; }),
+    setPendingResponseDot: (dot) => set((s) => { s.pendingResponseDot = dot; }),
 
     addFrame: (frame, parentId) =>
       set((s) => {
@@ -338,13 +355,34 @@ export const useCanvasStore = create<CanvasStore>()(
 
         // Response-to-response edge (branching)
         if (parentResponseId) {
+          // Pick which sides to connect based on where the child sits
+          // relative to the parent, so the line flows out the nearest edge.
+          const parent = s.nodes.find((n) => n.id === parentResponseId);
+          let sourceHandle = 's-right';
+          let targetHandle = 't-left';
+          if (parent) {
+            const dx = absolutePosition.x - parent.position.x;
+            const dy = absolutePosition.y - parent.position.y;
+            if (Math.abs(dx) >= Math.abs(dy)) {
+              if (dx >= 0) { sourceHandle = 's-right'; targetHandle = 't-left'; }
+              else { sourceHandle = 's-left'; targetHandle = 't-right'; }
+            } else {
+              if (dy >= 0) { sourceHandle = 's-bottom'; targetHandle = 't-top'; }
+              else { sourceHandle = 's-top'; targetHandle = 't-bottom'; }
+            }
+          }
+
+          // Smooth bezier curve matching the Figma design — a calm, solid,
+          // neutral line that shows one mind map flowing into the next.
           s.edges.push({
             id: generateId(),
             source: parentResponseId,
             target: responseId,
-            type: 'smoothstep',
-            animated: true,
-            style: { stroke: '#6366f166', strokeWidth: 2, strokeDasharray: '8 4' },
+            sourceHandle,
+            targetHandle,
+            type: 'default',
+            animated: false,
+            style: { stroke: '#94a3b8', strokeWidth: 2.5 },
             zIndex: 5,
           });
         }
@@ -358,6 +396,63 @@ export const useCanvasStore = create<CanvasStore>()(
           if (position) node.position = position;
           if (style) node.style = { ...node.style, ...style };
           if (parentId !== undefined) node.parentId = parentId;
+        });
+      }),
+
+    addExpansionNodes: (responseId, newSections, newCards, newEdges, updatedResponseDimensions) =>
+      set((s) => {
+        // Resize the response node
+        const responseNode = s.nodes.find((n) => n.id === responseId);
+        if (responseNode) {
+          responseNode.style = {
+            ...responseNode.style,
+            width: updatedResponseDimensions.width,
+            height: updatedResponseDimensions.height,
+          };
+        }
+
+        newSections.forEach(({ section, position, width, height }) => {
+          s.nodes.push({
+            id: section.id,
+            type: 'section',
+            position,
+            parentId: responseId,
+            data: { section },
+            style: { width, height },
+            zIndex: 1,
+            extent: 'parent' as const,
+            draggable: false,
+          } as SectionNode);
+        });
+
+        newCards.forEach(({ card, position, parentId }) => {
+          s.nodes.push({
+            id: card.id,
+            type: 'card',
+            position,
+            parentId,
+            data: { card },
+            zIndex: 2,
+            extent: 'parent' as const,
+            draggable: false,
+          } as CardNode);
+        });
+
+        newEdges.forEach(({ from, to, label }) => {
+          s.edges.push({
+            id: generateId(),
+            source: from,
+            target: to,
+            type: 'smoothstep',
+            animated: false,
+            label: label ?? undefined,
+            style: { stroke: '#6366f1', strokeWidth: 1.5 },
+            labelStyle: { fill: '#94a3b8', fontSize: 10, fontWeight: 500 },
+            labelBgStyle: { fill: '#0f172a', fillOpacity: 0.9 },
+            labelBgPadding: [4, 6] as [number, number],
+            labelBgBorderRadius: 4,
+            zIndex: 10,
+          });
         });
       }),
 
@@ -382,19 +477,54 @@ export const useCanvasStore = create<CanvasStore>()(
         }));
       }),
 
+    removeResponseGraph: (responseId) =>
+      set((s) => {
+        const toRemove = new Set<string>([responseId]);
+        // collect section children
+        s.nodes.forEach((n) => { if (n.parentId === responseId) toRemove.add(n.id); });
+        // collect card grandchildren
+        s.nodes.forEach((n) => { if (n.parentId && toRemove.has(n.parentId)) toRemove.add(n.id); });
+        s.nodes = s.nodes.filter((n) => !toRemove.has(n.id));
+        s.edges = s.edges.filter((e) => !toRemove.has(e.source) && !toRemove.has(e.target));
+        if (s.selectedFrameId && toRemove.has(s.selectedFrameId)) s.selectedFrameId = null;
+      }),
+
     clearCanvas: () => set((s) => { s.nodes = []; s.edges = []; s.selectedFrameId = null; }),
 
-    getNextFramePosition: (parentId) => {
+    getNextFramePosition: (nodeId) => {
       const { nodes } = get();
-      if (parentId) {
-        const parent = nodes.find((n) => n.id === parentId);
-        if (parent) {
-          return { x: parent.position.x + 440, y: parent.position.y };
+      const responseNodes = nodes.filter((n) => n.type === 'response');
+
+      // Resolve nodeId → ancestor response node (absolute position + actual style.width from Dagre)
+      let responseNode: Node | undefined;
+      if (nodeId) {
+        const sel = nodes.find((n) => n.id === nodeId);
+        if (sel?.type === 'response') {
+          responseNode = sel;
+        } else if (sel?.parentId) {
+          const parent = nodes.find((n) => n.id === sel.parentId);
+          if (parent?.type === 'response') {
+            responseNode = parent;
+          } else if (parent?.parentId) {
+            responseNode = nodes.find((n) => n.id === parent.parentId && n.type === 'response');
+          }
         }
       }
-      if (nodes.length === 0) return { x: 100, y: 100 };
-      const maxX = Math.max(...nodes.map((n) => n.position.x + 400));
-      return { x: maxX + 60, y: 100 };
+
+      if (responseNode) {
+        const w = (responseNode.style?.width as number) ?? 500;
+        return { x: responseNode.position.x + w + 80, y: responseNode.position.y };
+      }
+
+      if (responseNodes.length === 0) return { x: 100, y: 100 };
+
+      const rightmost = responseNodes.reduce((max, n) => {
+        const r = n.position.x + ((n.style?.width as number) ?? 500);
+        const mr = max.position.x + ((max.style?.width as number) ?? 500);
+        return r > mr ? n : max;
+      });
+      const w = (rightmost.style?.width as number) ?? 500;
+      return { x: rightmost.position.x + w + 80, y: 100 };
     },
   }))
 );

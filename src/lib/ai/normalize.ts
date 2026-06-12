@@ -24,6 +24,8 @@ export function normalizeCardGraph(data: Record<string, unknown>) {
     section: c.section && sectionIds.has(String(c.section)) ? String(c.section) : undefined,
     has_image: c.has_image !== false,
     ...(c.image_url ? { image_url: String(c.image_url) } : {}),
+    ...(c.type === 'action' ? { type: 'action' as const } : {}),
+    ...(c.type === 'action' && typeof c.question === 'string' ? { question: c.question } : {}),
   }));
 
   const cardIds = new Set(cards.map((c) => c.id));

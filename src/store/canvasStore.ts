@@ -361,7 +361,12 @@ export const useCanvasStore = create<CanvasStore>()(
             target: responseId,
             type: 'smoothstep',
             animated: true,
-            style: { stroke: '#818cf8', strokeWidth: 2, strokeDasharray: '8 4' },
+            style: { stroke: '#a5b4fc', strokeWidth: 3, strokeDasharray: '10 5' },
+            label: 'branches to',
+            labelStyle: { fill: '#94a3b8', fontSize: 10, fontWeight: 500 },
+            labelBgStyle: { fill: '#0f172a', fillOpacity: 0.85 },
+            labelBgPadding: [4, 6] as [number, number],
+            labelBgBorderRadius: 4,
             zIndex: 5,
           });
         }

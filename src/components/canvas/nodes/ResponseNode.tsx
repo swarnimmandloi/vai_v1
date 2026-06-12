@@ -66,8 +66,8 @@ export const ResponseNode = memo(function ResponseNode({
       onMouseLeave={() => setIsHovered(false)}
       onClick={() => setSelectedFrame(id)}
     >
-      {/* 4 expansion dots — appear on hover */}
-      {(isHovered || selected) && (['top', 'right', 'bottom', 'left'] as Direction[]).map((dir) => (
+      {/* 4 expansion dots — always visible so users can discover branching */}
+      {(['top', 'right', 'bottom', 'left'] as Direction[]).map((dir) => (
         <div
           key={dir}
           onMouseDown={(e) => e.stopPropagation()}
@@ -75,24 +75,26 @@ export const ResponseNode = memo(function ResponseNode({
           style={{
             position: 'absolute',
             ...DOT_POSITIONS[dir],
-            width: 14,
-            height: 14,
+            width: 16,
+            height: 16,
             borderRadius: '50%',
-            background: '#818cf8',
+            background: isHovered || selected ? '#818cf8' : 'rgba(99,102,241,0.35)',
             border: '2.5px solid #0f172a',
             cursor: 'pointer',
             zIndex: 20,
-            transition: 'transform 0.12s, background 0.12s',
-            boxShadow: '0 0 0 2px rgba(129,140,248,0.3)',
+            transition: 'transform 0.12s, background 0.15s',
+            boxShadow: isHovered || selected
+              ? '0 0 0 3px rgba(129,140,248,0.35)'
+              : '0 0 0 2px rgba(99,102,241,0.15)',
           }}
           onMouseEnter={(e) => {
             (e.currentTarget as HTMLDivElement).style.transform =
-              DOT_POSITIONS[dir].transform?.toString().replace(')', '') + ' scale(1.4)' || 'scale(1.4)';
+              DOT_POSITIONS[dir].transform?.toString().replace(')', '') + ' scale(1.35)' || 'scale(1.35)';
             (e.currentTarget as HTMLDivElement).style.background = '#a5b4fc';
           }}
           onMouseLeave={(e) => {
             (e.currentTarget as HTMLDivElement).style.transform = DOT_POSITIONS[dir].transform as string ?? '';
-            (e.currentTarget as HTMLDivElement).style.background = '#818cf8';
+            (e.currentTarget as HTMLDivElement).style.background = isHovered || selected ? '#818cf8' : 'rgba(99,102,241,0.35)';
           }}
         />
       ))}

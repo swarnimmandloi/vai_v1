@@ -8,7 +8,7 @@ import { useUIStore } from '@/store/uiStore';
 import { useCanvasContext } from './useCanvasContext';
 import type { KnowledgeCard, KnowledgeSection } from '@/types/canvas';
 import { generateId } from '@/lib/utils';
-import { layoutHierarchy } from '@/lib/canvas/layoutHierarchy';
+import { layoutHierarchy, prefixResponseIds } from '@/lib/canvas/layoutHierarchy';
 import { saveRecentCanvas } from '@/lib/recentCanvases';
 import { slugify } from '@/lib/utils';
 
@@ -106,8 +106,10 @@ export function useAIResponse() {
         );
 
         const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+        const { sections: pfxSections, cards: pfxCards, connections: pfxConnections } =
+          prefixResponseIds(responseId, parsed.sections ?? [], parsed.cards, parsed.connections ?? []);
         const { positionedSections, positionedCards, responseWidth, responseHeight } =
-          layoutHierarchy(responseId, parsed.sections ?? [], parsed.cards, parsed.connections ?? [], undefined, isMobile ? 'TB' : 'LR');
+          layoutHierarchy(responseId, pfxSections, pfxCards, pfxConnections, undefined, isMobile ? 'TB' : 'LR');
 
         removeLoadingNode(tempId);
 
@@ -116,7 +118,7 @@ export function useAIResponse() {
           parsed.topic ?? 'Response',
           positionedSections,
           positionedCards,
-          parsed.connections ?? [],
+          pfxConnections,
           clusterOffset,
           responseWidth,
           responseHeight,

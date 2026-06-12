@@ -12,7 +12,7 @@ import { ChatPanel } from '@/components/chat/ChatPanel';
 import { FirstVisitOverlay } from '@/components/first-visit/FirstVisitOverlay';
 import { useChatStore } from '@/store/chatStore';
 import { normalizeCardGraph } from '@/lib/ai/normalize';
-import { layoutHierarchy } from '@/lib/canvas/layoutHierarchy';
+import { layoutHierarchy, prefixResponseIds } from '@/lib/canvas/layoutHierarchy';
 
 interface PageProps {
   params: Promise<{ projectId: string; canvasId: string }>;
@@ -52,14 +52,16 @@ function CanvasPageInner({ canvasId }: { canvasId: string }) {
       const isMobile = window.innerWidth < 768;
       for (const file of files) {
         const normalized = normalizeCardGraph(file.content);
+        const { sections, cards, connections } =
+          prefixResponseIds(file.id, normalized.sections, normalized.cards, normalized.connections ?? []);
         const { positionedSections, positionedCards, responseWidth, responseHeight } =
-          layoutHierarchy(file.id, normalized.sections, normalized.cards, normalized.connections ?? [], undefined, isMobile ? 'TB' : 'LR');
+          layoutHierarchy(file.id, sections, cards, connections, undefined, isMobile ? 'TB' : 'LR');
         addResponseGraph(
           file.id,
           normalized.topic,
           positionedSections,
           positionedCards,
-          normalized.connections ?? [],
+          connections,
           { x: file.position_x, y: file.position_y },
           responseWidth,
           responseHeight

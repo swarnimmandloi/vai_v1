@@ -36,6 +36,20 @@ export interface LayoutResult {
   responseHeight: number;
 }
 
+export function prefixResponseIds(
+  responseId: string,
+  sections: KnowledgeSection[],
+  cards: KnowledgeCard[],
+  connections: Array<{ from: string; to: string; label?: string }>,
+) {
+  const p = (id: string) => `${responseId}_${id}`;
+  return {
+    sections: sections.map((s) => ({ ...s, id: p(s.id) })),
+    cards: cards.map((c) => ({ ...c, id: p(c.id), section: c.section ? p(c.section) : undefined })),
+    connections: connections.map((c) => ({ ...c, from: p(c.from), to: p(c.to) })),
+  };
+}
+
 export function layoutHierarchy(
   responseId: string,
   sections: KnowledgeSection[],

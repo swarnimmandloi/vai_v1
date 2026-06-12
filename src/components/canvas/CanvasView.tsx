@@ -97,9 +97,6 @@ export function CanvasView({ canvasId }: CanvasViewProps) {
 
       if (allMeasured) relaidOutRef.current.add(responseNode.id);
 
-      // All cards measured — mark as done before computing layout
-      relaidOutRef.current.add(responseNode.id);
-
       const cards = cardNodes.map((n) => (n.data as CardNodeData).card);
       const sections = sectionNodes.map((n) => (n.data as SectionNodeData).section);
       const cardIdSet = new Set(cardNodes.map((n) => n.id));

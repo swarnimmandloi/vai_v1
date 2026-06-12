@@ -33,7 +33,9 @@ export function useAIResponse() {
       addUserMessage(question);
 
       const responseId = generateId();
-      const clusterOffset = getMeasuredNextPosition(getNodes());
+      const pendingPos = useCanvasStore.getState().pendingExpansionPosition;
+      if (pendingPos) useCanvasStore.getState().setPendingExpansionPosition(null);
+      const clusterOffset = pendingPos ?? getMeasuredNextPosition(getNodes());
       const tempId = `loading-${generateId()}`;
       addLoadingNode(tempId, clusterOffset);
       setStreaming(true, tempId);

@@ -23,6 +23,7 @@ import { ResponseNode } from './nodes/ResponseNode';
 import type { CardNodeData, SectionNodeData, ResponseNodeData } from '@/store/canvasStore';
 import { layoutHierarchy } from '@/lib/canvas/layoutHierarchy';
 import { CardExpansionOverlay } from './CardExpansionOverlay';
+import { ResponseExpansionOverlay } from './ResponseExpansionOverlay';
 
 const nodeTypes: NodeTypes = {
   frame: FrameNode as NodeTypes['frame'],
@@ -214,6 +215,7 @@ export function CanvasView({ canvasId }: CanvasViewProps) {
         />
       </ReactFlow>
       <CardExpansionOverlay />
+      <ResponseExpansionOverlay />
     </div>
   );
 }

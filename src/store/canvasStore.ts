@@ -42,12 +42,16 @@ interface CanvasStore {
   edges: Edge[];
   selectedFrameId: string | null;
   canvasId: string | null;
+  pendingExpansionPosition: { x: number; y: number } | null;
+  pendingResponseDot: { responseId: string; direction: 'top' | 'right' | 'bottom' | 'left' } | null;
 
   onNodesChange: (changes: NodeChange[]) => void;
   onEdgesChange: (changes: EdgeChange[]) => void;
   onConnect: (connection: Connection) => void;
 
   setSelectedFrame: (id: string | null) => void;
+  setPendingExpansionPosition: (pos: { x: number; y: number } | null) => void;
+  setPendingResponseDot: (dot: { responseId: string; direction: 'top' | 'right' | 'bottom' | 'left' } | null) => void;
   addFrame: (frame: Frame, parentId?: string) => void;
   addLoadingNode: (tempId: string, position: { x: number; y: number }) => void;
   removeLoadingNode: (tempId: string) => void;
@@ -113,6 +117,8 @@ export const useCanvasStore = create<CanvasStore>()(
     edges: [],
     selectedFrameId: null,
     canvasId: null,
+    pendingExpansionPosition: null,
+    pendingResponseDot: null,
 
     onNodesChange: (changes) =>
       set((s) => {
@@ -130,6 +136,8 @@ export const useCanvasStore = create<CanvasStore>()(
       }),
 
     setSelectedFrame: (id) => set((s) => { s.selectedFrameId = id; }),
+    setPendingExpansionPosition: (pos) => set((s) => { s.pendingExpansionPosition = pos; }),
+    setPendingResponseDot: (dot) => set((s) => { s.pendingResponseDot = dot; }),
 
     addFrame: (frame, parentId) =>
       set((s) => {

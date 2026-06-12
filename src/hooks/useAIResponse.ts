@@ -70,6 +70,15 @@ export function useAIResponse() {
         }
       }
 
+      // Every new response chains to the previous one — the connecting line
+      // between mind maps is core to the canvas story (per Figma design).
+      if (!parentResponseId) {
+        const responseNodes = nodes.filter((n) => n.type === 'response');
+        if (responseNodes.length > 0) {
+          parentResponseId = responseNodes[responseNodes.length - 1].id;
+        }
+      }
+
       try {
         const response = await fetch('/api/ai/respond', {
           method: 'POST',

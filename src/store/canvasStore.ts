@@ -372,20 +372,17 @@ export const useCanvasStore = create<CanvasStore>()(
             }
           }
 
+          // Smooth bezier curve matching the Figma design — a calm, solid,
+          // neutral line that shows one mind map flowing into the next.
           s.edges.push({
             id: generateId(),
             source: parentResponseId,
             target: responseId,
             sourceHandle,
             targetHandle,
-            type: 'smoothstep',
-            animated: true,
-            style: { stroke: '#a5b4fc', strokeWidth: 3, strokeDasharray: '10 5' },
-            label: 'branches to',
-            labelStyle: { fill: '#94a3b8', fontSize: 10, fontWeight: 500 },
-            labelBgStyle: { fill: '#0f172a', fillOpacity: 0.85 },
-            labelBgPadding: [4, 6] as [number, number],
-            labelBgBorderRadius: 4,
+            type: 'default',
+            animated: false,
+            style: { stroke: '#94a3b8', strokeWidth: 2.5 },
             zIndex: 5,
           });
         }

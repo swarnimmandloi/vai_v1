@@ -97,6 +97,14 @@ interface CanvasStore {
     style?: Record<string, unknown>;
     parentId?: string;
   }>) => void;
+
+  addExpansionNodes: (
+    responseId: string,
+    newSections: Array<{ section: KnowledgeSection; position: { x: number; y: number }; width: number; height: number }>,
+    newCards: Array<{ card: KnowledgeCard; position: { x: number; y: number }; parentId: string }>,
+    newEdges: Array<{ from: string; to: string; label?: string }>,
+    updatedResponseDimensions: { width: number; height: number }
+  ) => void;
 }
 
 export const useCanvasStore = create<CanvasStore>()(
@@ -359,6 +367,63 @@ export const useCanvasStore = create<CanvasStore>()(
           if (position) node.position = position;
           if (style) node.style = { ...node.style, ...style };
           if (parentId !== undefined) node.parentId = parentId;
+        });
+      }),
+
+    addExpansionNodes: (responseId, newSections, newCards, newEdges, updatedResponseDimensions) =>
+      set((s) => {
+        // Resize the response node
+        const responseNode = s.nodes.find((n) => n.id === responseId);
+        if (responseNode) {
+          responseNode.style = {
+            ...responseNode.style,
+            width: updatedResponseDimensions.width,
+            height: updatedResponseDimensions.height,
+          };
+        }
+
+        newSections.forEach(({ section, position, width, height }) => {
+          s.nodes.push({
+            id: section.id,
+            type: 'section',
+            position,
+            parentId: responseId,
+            data: { section },
+            style: { width, height },
+            zIndex: 1,
+            extent: 'parent' as const,
+            draggable: false,
+          } as SectionNode);
+        });
+
+        newCards.forEach(({ card, position, parentId }) => {
+          s.nodes.push({
+            id: card.id,
+            type: 'card',
+            position,
+            parentId,
+            data: { card },
+            zIndex: 2,
+            extent: 'parent' as const,
+            draggable: false,
+          } as CardNode);
+        });
+
+        newEdges.forEach(({ from, to, label }) => {
+          s.edges.push({
+            id: generateId(),
+            source: from,
+            target: to,
+            type: 'smoothstep',
+            animated: false,
+            label: label ?? undefined,
+            style: { stroke: '#6366f1', strokeWidth: 1.5 },
+            labelStyle: { fill: '#94a3b8', fontSize: 10, fontWeight: 500 },
+            labelBgStyle: { fill: '#0f172a', fillOpacity: 0.9 },
+            labelBgPadding: [4, 6] as [number, number],
+            labelBgBorderRadius: 4,
+            zIndex: 10,
+          });
         });
       }),
 

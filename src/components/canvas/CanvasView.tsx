@@ -22,6 +22,7 @@ import { SectionNode } from './nodes/SectionNode';
 import { ResponseNode } from './nodes/ResponseNode';
 import type { CardNodeData, SectionNodeData, ResponseNodeData } from '@/store/canvasStore';
 import { layoutHierarchy } from '@/lib/canvas/layoutHierarchy';
+import { CardExpansionOverlay } from './CardExpansionOverlay';
 
 const nodeTypes: NodeTypes = {
   frame: FrameNode as NodeTypes['frame'],
@@ -163,7 +164,7 @@ export function CanvasView({ canvasId }: CanvasViewProps) {
   }, [canvasId]);
 
   return (
-    <div className="w-full h-full" style={{ background: 'var(--canvas-bg)' }}>
+    <div className="w-full h-full" style={{ background: 'var(--canvas-bg)', position: 'relative' }}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -212,6 +213,7 @@ export function CanvasView({ canvasId }: CanvasViewProps) {
           }}
         />
       </ReactFlow>
+      <CardExpansionOverlay />
     </div>
   );
 }

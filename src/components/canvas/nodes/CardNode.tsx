@@ -26,7 +26,6 @@ export const CardNode = memo(function CardNode({
   selected,
 }: NodeProps<Node<CardNodeData>>) {
   const { card } = data;
-  const [followUpText, setFollowUpText] = useState('');
   const [imgLoaded, setImgLoaded] = useState(false);
   const setSelectedFrame = useCanvasStore((s) => s.setSelectedFrame);
 
@@ -35,16 +34,6 @@ export const CardNode = memo(function CardNode({
   const primaryUrl = card.image_url
     ?? `https://image.pollinations.ai/prompt/${encodeURIComponent(card.heading)}?width=240&height=140&nologo=true&seed=${stableHash(card.heading)}`;
   const [imgSrc, setImgSrc] = useState(primaryUrl);
-
-  function handleFollowUp(e: React.FormEvent) {
-    e.preventDefault();
-    if (!followUpText.trim()) return;
-    setSelectedFrame(id);
-    window.dispatchEvent(
-      new CustomEvent('vai:follow-up', { detail: { question: followUpText, frameId: id } })
-    );
-    setFollowUpText('');
-  }
 
   return (
     <div
@@ -129,33 +118,6 @@ export const CardNode = memo(function CardNode({
           </div>
         </div>
 
-        {/* Follow-up input */}
-        <div
-          className="px-3 py-2"
-          style={{ borderTop: '1px solid var(--border)' }}
-          onMouseDown={(e) => e.stopPropagation()}
-        >
-          <form onSubmit={handleFollowUp} className="flex items-center gap-2">
-            <input
-              type="text"
-              value={followUpText}
-              onChange={(e) => setFollowUpText(e.target.value)}
-              placeholder="Ask about this..."
-              className="flex-1 text-xs bg-transparent outline-none placeholder:opacity-40"
-              style={{ color: 'var(--foreground)' }}
-              onFocus={() => setSelectedFrame(id)}
-            />
-            {followUpText && (
-              <button
-                type="submit"
-                className="text-xs px-2 py-0.5 rounded cursor-pointer shrink-0"
-                style={{ background: 'var(--accent)', color: 'white' }}
-              >
-                Ask
-              </button>
-            )}
-          </form>
-        </div>
       </div>
     </div>
   );

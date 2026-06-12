@@ -59,15 +59,37 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
   }
 
-  const { id, position_x, position_y } = await request.json() as {
+  const body = await request.json() as {
     id: string;
-    position_x: number;
-    position_y: number;
+    position_x?: number;
+    position_y?: number;
+    content?: Record<string, unknown>;
   };
+
+  const { id, position_x, position_y, content } = body;
+
+  const updatePayload: Record<string, unknown> = {};
+  if (position_x !== undefined) updatePayload.position_x = position_x;
+  if (position_y !== undefined) updatePayload.position_y = position_y;
+
+  if (content !== undefined) {
+    // Read-modify-write to preserve existing fields (topic, chat_summary, etc.)
+    const { data: existing } = await supabase
+      .from('files')
+      .select('content')
+      .eq('id', id)
+      .eq('user_id', user.id)
+      .single();
+    updatePayload.content = { ...(existing?.content as Record<string, unknown> ?? {}), ...content };
+  }
+
+  if (Object.keys(updatePayload).length === 0) {
+    return NextResponse.json({ ok: true });
+  }
 
   const { error } = await supabase
     .from('files')
-    .update({ position_x, position_y })
+    .update(updatePayload)
     .eq('id', id)
     .eq('user_id', user.id);
 

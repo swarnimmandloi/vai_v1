@@ -68,7 +68,7 @@ export const ResponseNode = memo(function ResponseNode({
     };
 
     sel(id);
-    setPendingExpansionPosition(positions[direction]);
+    setPendingExpansionPosition({ ...positions[direction], direction });
     setPendingResponseDot({ responseId: id, direction });
   }
 

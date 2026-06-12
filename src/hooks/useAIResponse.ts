@@ -38,7 +38,10 @@ export function useAIResponse() {
       const responseId = generateId();
       const pendingPos = useCanvasStore.getState().pendingExpansionPosition;
       if (pendingPos) useCanvasStore.getState().setPendingExpansionPosition(null);
-      const clusterOffset = pendingPos ?? getMeasuredNextPosition(getNodes());
+      const rawOffset = pendingPos ?? getMeasuredNextPosition(getNodes());
+      const clusterOffset = pendingPos?.direction
+        ? findFreePosition(rawOffset, pendingPos.direction, getNodes())
+        : rawOffset;
       const tempId = `loading-${generateId()}`;
       addLoadingNode(tempId, clusterOffset);
       setStreaming(true, tempId);
@@ -192,6 +195,46 @@ export function useAIResponse() {
 }
 
 import type { Node } from '@xyflow/react';
+
+function findFreePosition(
+  ideal: { x: number; y: number },
+  direction: string,
+  allNodes: Node[]
+): { x: number; y: number } {
+  const W = 700, H = 500, PAD = 100;
+  const responseNodes = allNodes.filter((n) => n.type === 'response');
+
+  function overlaps(pos: { x: number; y: number }): boolean {
+    return responseNodes.some((n) => {
+      const nw = (n.measured?.width as number | undefined) ?? (n.style?.width as number | undefined) ?? W;
+      const nh = (n.measured?.height as number | undefined) ?? (n.style?.height as number | undefined) ?? H;
+      return (
+        pos.x < n.position.x + nw + PAD &&
+        pos.x + W > n.position.x - PAD &&
+        pos.y < n.position.y + nh + PAD &&
+        pos.y + H > n.position.y - PAD
+      );
+    });
+  }
+
+  if (!overlaps(ideal)) return ideal;
+
+  const isHorizontal = direction === 'right' || direction === 'left';
+  const STEP = (isHorizontal ? H : W) + PAD;
+
+  for (let i = 1; i <= 6; i++) {
+    const a = isHorizontal
+      ? { x: ideal.x, y: ideal.y + STEP * i }
+      : { x: ideal.x + STEP * i, y: ideal.y };
+    if (!overlaps(a)) return a;
+
+    const b = isHorizontal
+      ? { x: ideal.x, y: ideal.y - STEP * i }
+      : { x: ideal.x - STEP * i, y: ideal.y };
+    if (!overlaps(b)) return b;
+  }
+  return ideal;
+}
 
 /**
  * Always place the next response to the right of the rightmost existing response,

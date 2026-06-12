@@ -42,7 +42,7 @@ interface CanvasStore {
   edges: Edge[];
   selectedFrameId: string | null;
   canvasId: string | null;
-  pendingExpansionPosition: { x: number; y: number } | null;
+  pendingExpansionPosition: { x: number; y: number; direction?: string } | null;
   pendingResponseDot: { responseId: string; direction: 'top' | 'right' | 'bottom' | 'left' } | null;
 
   onNodesChange: (changes: NodeChange[]) => void;
@@ -50,7 +50,7 @@ interface CanvasStore {
   onConnect: (connection: Connection) => void;
 
   setSelectedFrame: (id: string | null) => void;
-  setPendingExpansionPosition: (pos: { x: number; y: number } | null) => void;
+  setPendingExpansionPosition: (pos: { x: number; y: number; direction?: string } | null) => void;
   setPendingResponseDot: (dot: { responseId: string; direction: 'top' | 'right' | 'bottom' | 'left' } | null) => void;
   addFrame: (frame: Frame, parentId?: string) => void;
   addLoadingNode: (tempId: string, position: { x: number; y: number }) => void;

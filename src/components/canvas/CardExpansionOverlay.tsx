@@ -1,8 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { useReactFlow, useOnViewportChange, useInternalNode } from '@xyflow/react';
-import type { Viewport } from '@xyflow/react';
+import { useReactFlow, useViewport, useInternalNode } from '@xyflow/react';
 import { useCanvasStore } from '@/store/canvasStore';
 import { useCardExpansion } from '@/hooks/useCardExpansion';
 import { estimatedCardHeight, CARD_W } from '@/lib/canvas/layoutHierarchy';
@@ -11,18 +10,16 @@ import type { CardNodeData } from '@/store/canvasStore';
 export function CardExpansionOverlay() {
   const selectedFrameId = useCanvasStore((s) => s.selectedFrameId);
   const nodes = useCanvasStore((s) => s.nodes);
-  const { getViewport } = useReactFlow();
   const { expand, isExpanding } = useCardExpansion();
-  const [viewport, setViewport] = useState<Viewport>(() => getViewport());
+  // useViewport() is React Flow's own reactive hook — always reflects the live
+  // viewport, including the initial fitView pass. Manual state + useOnViewportChange
+  // misses that first fitView, which caused the overlay to appear at wrong coords.
+  const { x: vpX, y: vpY, zoom } = useViewport();
   const [question, setQuestion] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const prevCardIdRef = useRef<string | null>(null);
 
-  // useInternalNode gives React Flow's own tracked absolute position for this node.
-  // Must be called unconditionally — will return undefined when no card is selected.
   const internalNode = useInternalNode(selectedFrameId ?? '');
-
-  useOnViewportChange({ onChange: setViewport });
 
   const selectedNode = nodes.find(
     (n) => n.id === selectedFrameId && n.type === 'card',
@@ -55,7 +52,6 @@ export function CardExpansionOverlay() {
 
   // Use React Flow's own absolute position to avoid manual parent-chain math.
   const absPos = internalNode?.internals.positionAbsolute ?? { x: 0, y: 0 };
-  const { x: vpX, y: vpY, zoom } = viewport;
 
   const screenX = absPos.x * zoom + vpX;
   const screenY = absPos.y * zoom + vpY;

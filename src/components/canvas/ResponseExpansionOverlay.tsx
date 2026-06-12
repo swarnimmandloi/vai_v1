@@ -1,8 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { useReactFlow, useOnViewportChange } from '@xyflow/react';
-import type { Viewport } from '@xyflow/react';
+import { useViewport } from '@xyflow/react';
 import { useCanvasStore } from '@/store/canvasStore';
 
 type Direction = 'top' | 'right' | 'bottom' | 'left';
@@ -48,12 +47,9 @@ export function ResponseExpansionOverlay() {
   const pendingDot = useCanvasStore((s) => s.pendingResponseDot);
   const setPendingResponseDot = useCanvasStore((s) => s.setPendingResponseDot);
   const nodes = useCanvasStore((s) => s.nodes);
-  const { getViewport } = useReactFlow();
-  const [viewport, setViewport] = useState<Viewport>(() => getViewport());
+  const { x: vpX, y: vpY, zoom } = useViewport();
   const [question, setQuestion] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
-
-  useOnViewportChange({ onChange: setViewport });
 
   // Auto-focus when a dot is clicked
   useEffect(() => {
@@ -94,7 +90,6 @@ export function ResponseExpansionOverlay() {
 
   const nodeW = (responseNode.style?.width as number) ?? 700;
   const nodeH = (responseNode.style?.height as number) ?? 500;
-  const { x: vpX, y: vpY, zoom } = viewport;
 
   const { left, top } = getOverlayPosition(
     responseNode.position.x,

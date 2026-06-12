@@ -1,6 +1,7 @@
 'use client';
 
 import { memo, useState } from 'react';
+import { ChevronRight } from 'lucide-react';
 import { Handle, Position, type NodeProps, type Node } from '@xyflow/react';
 import ReactMarkdown from 'react-markdown';
 import type { CardNodeData } from '@/store/canvasStore';
@@ -28,6 +29,60 @@ export const CardNode = memo(function CardNode({
   const { card } = data;
   const [imgLoaded, setImgLoaded] = useState(false);
   const setSelectedFrame = useCanvasStore((s) => s.setSelectedFrame);
+
+  function handleActionClick(e: React.MouseEvent) {
+    e.stopPropagation();
+    const allNodes = useCanvasStore.getState().nodes;
+    const self = allNodes.find((n) => n.id === id);
+    const parent = self?.parentId ? allNodes.find((n) => n.id === self.parentId) : null;
+    const responseId = parent?.type === 'response'
+      ? parent.id
+      : (parent?.parentId ?? null);
+
+    if (responseId) useCanvasStore.getState().setSelectedFrame(responseId);
+    window.dispatchEvent(
+      new CustomEvent('vai:follow-up', {
+        detail: { question: card.question ?? card.heading, frameId: responseId },
+      })
+    );
+  }
+
+  if (card.type === 'action') {
+    return (
+      <div
+        onClick={handleActionClick}
+        onMouseDown={(e) => e.stopPropagation()}
+        style={{
+          width: 240,
+          height: '100%',
+          background: 'rgba(20,184,166,0.08)',
+          border: '1px solid rgba(20,184,166,0.25)',
+          borderRadius: 10,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '0 14px',
+          cursor: 'pointer',
+          gap: 8,
+          transition: 'background 0.15s, border-color 0.15s',
+          boxSizing: 'border-box',
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = 'rgba(20,184,166,0.16)';
+          e.currentTarget.style.borderColor = 'rgba(20,184,166,0.5)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = 'rgba(20,184,166,0.08)';
+          e.currentTarget.style.borderColor = 'rgba(20,184,166,0.25)';
+        }}
+      >
+        <span style={{ fontSize: 13, fontWeight: 500, color: '#99f6e4', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {card.heading}
+        </span>
+        <ChevronRight size={14} style={{ color: '#5eead4', flexShrink: 0 }} />
+      </div>
+    );
+  }
 
   const showImage = !!(card.image_url || card.has_image !== false);
   const picsumUrl = `https://picsum.photos/seed/${stableHash(card.heading)}/240/140`;

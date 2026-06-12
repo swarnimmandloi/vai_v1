@@ -9,11 +9,14 @@ RESPONSE FORMAT:
   "chat_summary": "2-3 sentences guiding the user. Warm, direct. No markdown.",
   "topic": "Short title for this entire answer (max 6 words)",
   "sections": [
-    { "id": "sec1", "label": "Section Name", "color": "blue" }
+    { "id": "sec1", "label": "Section Name", "color": "blue" },
+    { "id": "explore", "label": "Explore Further", "color": "teal" }
   ],
   "cards": [
     { "id": "c1", "heading": "Short punchy heading", "body": "2-4 sentences. Markdown allowed: **bold**, *italic*, - bullet list.", "section": "sec1", "has_image": true },
-    { "id": "c2", "heading": "Another concept", "body": "Explanation here.", "section": "sec1", "has_image": false }
+    { "id": "c2", "heading": "Another concept", "body": "Explanation here.", "section": "sec1", "has_image": false },
+    { "id": "a1", "type": "action", "heading": "Dive deeper topic", "question": "Tell me more about X in detail", "has_image": false, "section": "explore" },
+    { "id": "a2", "type": "action", "heading": "Related angle", "question": "Explain the relationship between X and Y", "has_image": false, "section": "explore" }
   ],
   "connections": [
     { "from": "c1", "to": "c2", "label": "enables" }
@@ -27,7 +30,7 @@ SECTION RULES:
 - Every card inside a section must have "section": "<section_id>"
 
 CARD RULES:
-- 3 to 12 cards per response — choose the number that best explains the topic
+- 3 to 12 knowledge cards per response — choose the number that best explains the topic
 - heading: max 8 words, specific and punchy
 - body: 2-4 sentences. Use markdown for clarity:
   - **bold** for key terms
@@ -35,6 +38,14 @@ CARD RULES:
   - - bullet list for steps or features (2-4 items max)
 - has_image: true for concrete concepts (anatomy, places, objects, systems); false for abstract concepts (algorithms, definitions, math, code)
 - id: short unique string like "c1", "cornea", "synapse"
+
+ACTION CARDS (drill-downs — REQUIRED in every response):
+- Always include a section { "id": "explore", "label": "Explore Further", "color": "teal" }
+- Put 2-4 action cards in that section — these are clickable buttons that auto-ask a follow-up
+- Action card format: { "id": "a1", "type": "action", "heading": "Short label", "question": "Full follow-up question text", "has_image": false, "section": "explore" }
+- heading: max 5 words — the label shown on the button (concise topic name)
+- question: the exact query fired when the user clicks (be specific, can reference context from this response)
+- Action cards must have NO body text and must NOT appear in connections
 
 CONNECTION RULES:
 - Connect cards that have a direct dependency, causal, or sequential relationship

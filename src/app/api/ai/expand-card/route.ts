@@ -1,5 +1,4 @@
 import Anthropic from '@anthropic-ai/sdk';
-import type { KnowledgeCard, KnowledgeSection } from '@/types/canvas';
 
 export const maxDuration = 60;
 
@@ -9,59 +8,62 @@ const anthropic = new Anthropic({
 
 const EXPAND_SYSTEM_PROMPT = `You are expanding a specific card in a knowledge mind map. The user wants to drill deeper into one card's topic.
 
-Return ONLY a JSON object — no markdown, no explanation — with this exact shape:
+Return ONLY a raw JSON object — no markdown fences, no explanation, no text before or after — with EXACTLY this shape:
 {
   "new_cards": [
-    { "id": "nc1", "heading": "...", "body": "...", "has_image": false }
+    { "id": "nc1", "heading": "Short heading here", "body": "Two to four sentence explanation.", "has_image": false }
   ],
   "new_sections": [],
   "new_connections": [
-    { "from": "<sourceCardId>", "to": "nc1", "label": "explains" }
+    { "from": "SOURCE_CARD_ID_GOES_HERE", "to": "nc1", "label": "explains" }
   ]
 }
 
 Rules:
-- 2–4 new cards maximum
+- 2–4 new_cards maximum
 - heading: max 8 words, noun-phrase style
 - body: 2–4 sentences, concrete and informative, markdown allowed (**bold**, *italic*, bullet lists)
-- has_image: true only for concrete physical things (anatomy, objects, places), false for concepts/code
-- new_connections: "from" must be the source card's id; "to" must be an id from new_cards
-- new_sections: include only if the new cards form a clearly distinct group worth labeling; otherwise leave as []
+- has_image: true only for concrete physical things (anatomy, objects, places), false for concepts/code/process
+- new_connections: "from" must be the exact source card id given to you; "to" must be an id from new_cards
+- new_sections: include ONLY if the new cards form a clearly distinct group worth labeling; otherwise use []
 - Connection labels: "causes", "enables", "requires", "leads to", "part of", "feeds into", "triggers", "contrasts with", "example of"
-- Do not repeat content already covered by existing cards
-- Return ONLY the JSON object`;
+- Do NOT repeat content already covered by existing cards
+- IMPORTANT: return ONLY the JSON object, starting with { and ending with }`;
 
 export async function POST(req: Request) {
-  const body = await req.json() as {
-    question: string;
-    sourceCard: { id: string; heading: string; body: string };
-    responseTopic: string;
-    currentCards: KnowledgeCard[];
-    currentSections: KnowledgeSection[];
-  };
+  try {
+    const body = await req.json() as {
+      question: string;
+      sourceCard: { id: string; heading: string; body: string };
+      responseTopic: string;
+      currentCards: Array<{ id: string; heading: string; body: string }>;
+    };
 
-  const { question, sourceCard, responseTopic, currentCards, currentSections } = body;
+    const { question, sourceCard, responseTopic, currentCards } = body;
 
-  const existingCardSummary = currentCards
-    .filter((c) => c.id !== sourceCard.id)
-    .map((c) => `- "${c.heading}"`)
-    .join('\n');
+    if (!question || !sourceCard?.id || !sourceCard?.heading) {
+      return Response.json({ error: 'Missing required fields' }, { status: 400 });
+    }
 
-  const userMessage = `Mind map topic: "${responseTopic}"
+    const existingCardSummary = (currentCards ?? [])
+      .filter((c) => c.id !== sourceCard.id)
+      .map((c) => `- "${c.heading}"`)
+      .join('\n');
+
+    const userMessage = `Mind map topic: "${responseTopic ?? ''}"
 
 Source card to expand:
 ID: ${sourceCard.id}
 Heading: ${sourceCard.heading}
-Content: ${sourceCard.body}
+Content: ${sourceCard.body ?? ''}
 
 Existing cards already on the map (do not repeat these):
 ${existingCardSummary || '(none)'}
 
-User's question: ${question}
+User question: ${question}
 
-Return new cards that answer this question, branching from the source card.`;
+Return new_cards that answer this question, branching from the source card (ID: ${sourceCard.id}).`;
 
-  try {
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 2000,
@@ -75,10 +77,12 @@ Return new cards that answer this question, branching from the source card.`;
     }
 
     let jsonText = textBlock.text.trim();
-    const fenceMatch = jsonText.match(/```(?:json)?\n?([\s\S]*?)\n?```/);
+    // Strip markdown fences if present
+    const fenceMatch = jsonText.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/);
     if (fenceMatch) {
       jsonText = fenceMatch[1].trim();
     } else {
+      // Extract first JSON object
       const braceStart = jsonText.indexOf('{');
       const braceEnd = jsonText.lastIndexOf('}');
       if (braceStart !== -1 && braceEnd > braceStart) {
@@ -86,32 +90,32 @@ Return new cards that answer this question, branching from the source card.`;
       }
     }
 
-    let parsed: unknown;
+    let parsed: Record<string, unknown>;
     try {
-      parsed = JSON.parse(jsonText);
+      parsed = JSON.parse(jsonText) as Record<string, unknown>;
     } catch {
-      console.error('[VAI] expand-card JSON parse failed:', jsonText.slice(0, 300));
-      return Response.json({ error: 'AI returned invalid JSON' }, { status: 500 });
+      console.error('[VAI] expand-card JSON parse failed. Raw:', jsonText.slice(0, 500));
+      return Response.json({ error: 'AI returned invalid JSON', raw: jsonText.slice(0, 200) }, { status: 500 });
     }
 
-    const data = parsed as {
-      new_cards?: unknown[];
-      new_sections?: unknown[];
-      new_connections?: unknown[];
-    };
+    // Accept both new_cards and cards as the array key (Claude sometimes varies)
+    const newCards = parsed.new_cards ?? parsed.cards;
+    const newConnections = parsed.new_connections ?? parsed.connections ?? [];
+    const newSections = parsed.new_sections ?? parsed.sections ?? [];
 
-    if (!Array.isArray(data.new_cards)) {
-      return Response.json({ error: 'AI response missing new_cards' }, { status: 500 });
+    if (!Array.isArray(newCards) || newCards.length === 0) {
+      console.error('[VAI] expand-card: no new_cards in response:', JSON.stringify(parsed).slice(0, 300));
+      return Response.json({ error: 'AI response missing new_cards array', parsed }, { status: 500 });
     }
 
     return Response.json({
-      new_cards: data.new_cards,
-      new_sections: data.new_sections ?? [],
-      new_connections: data.new_connections ?? [],
+      new_cards: newCards,
+      new_sections: newSections,
+      new_connections: newConnections,
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error('[VAI] expand-card route error:', message);
+    console.error('[VAI] expand-card error:', message);
     return Response.json({ error: message }, { status: 500 });
   }
 }

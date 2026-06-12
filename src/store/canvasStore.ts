@@ -353,7 +353,7 @@ export const useCanvasStore = create<CanvasStore>()(
             target: responseId,
             type: 'smoothstep',
             animated: true,
-            style: { stroke: '#6366f166', strokeWidth: 2, strokeDasharray: '8 4' },
+            style: { stroke: '#818cf8', strokeWidth: 2, strokeDasharray: '8 4' },
             zIndex: 5,
           });
         }

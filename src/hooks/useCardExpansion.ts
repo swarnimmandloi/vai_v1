@@ -86,7 +86,10 @@ export function useCardExpansion() {
           }),
         });
 
-        if (!res.ok) throw new Error(`expand-card API ${res.status}`);
+        if (!res.ok) {
+          const errBody = await res.json().catch(() => ({})) as { error?: string };
+          throw new Error(`expand-card API ${res.status}: ${errBody.error ?? 'unknown'}`);
+        }
 
         const data = await res.json() as {
           new_cards: Array<{ id: string; heading: string; body: string; section?: string; has_image?: boolean }>;

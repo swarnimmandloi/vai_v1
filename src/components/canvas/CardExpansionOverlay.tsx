@@ -1,20 +1,12 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { useReactFlow, useOnViewportChange } from '@xyflow/react';
-import type { Node, Viewport } from '@xyflow/react';
+import { useReactFlow, useOnViewportChange, useInternalNode } from '@xyflow/react';
+import type { Viewport } from '@xyflow/react';
 import { useCanvasStore } from '@/store/canvasStore';
 import { useCardExpansion } from '@/hooks/useCardExpansion';
 import { estimatedCardHeight, CARD_W } from '@/lib/canvas/layoutHierarchy';
 import type { CardNodeData } from '@/store/canvasStore';
-
-function getAbsoluteFlowPos(nodeId: string, allNodes: Node[]): { x: number; y: number } {
-  const node = allNodes.find((n) => n.id === nodeId);
-  if (!node) return { x: 0, y: 0 };
-  if (!node.parentId) return { x: node.position.x, y: node.position.y };
-  const parentPos = getAbsoluteFlowPos(node.parentId, allNodes);
-  return { x: parentPos.x + node.position.x, y: parentPos.y + node.position.y };
-}
 
 export function CardExpansionOverlay() {
   const selectedFrameId = useCanvasStore((s) => s.selectedFrameId);
@@ -25,6 +17,10 @@ export function CardExpansionOverlay() {
   const [question, setQuestion] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const prevCardIdRef = useRef<string | null>(null);
+
+  // useInternalNode gives React Flow's own tracked absolute position for this node.
+  // Must be called unconditionally — will return undefined when no card is selected.
+  const internalNode = useInternalNode(selectedFrameId ?? '');
 
   useOnViewportChange({ onChange: setViewport });
 
@@ -56,12 +52,14 @@ export function CardExpansionOverlay() {
   if (!selectedNode) return null;
 
   const card = (selectedNode.data as CardNodeData).card;
-  const absPos = getAbsoluteFlowPos(selectedNode.id, nodes);
+
+  // Use React Flow's own absolute position to avoid manual parent-chain math.
+  const absPos = internalNode?.internals.positionAbsolute ?? { x: 0, y: 0 };
   const { x: vpX, y: vpY, zoom } = viewport;
 
   const screenX = absPos.x * zoom + vpX;
   const screenY = absPos.y * zoom + vpY;
-  const cardHeightPx = (selectedNode.measured?.height ?? estimatedCardHeight(card)) * zoom;
+  const cardHeightPx = (internalNode?.measured?.height ?? estimatedCardHeight(card)) * zoom;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

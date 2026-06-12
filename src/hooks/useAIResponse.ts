@@ -13,15 +13,13 @@ import { saveRecentCanvas } from '@/lib/recentCanvases';
 import { slugify } from '@/lib/utils';
 
 export function useAIResponse() {
-  const { getCanvasSummary, getThreadHistory, selectedFrameId } = useCanvasContext();
+  const { getCanvasSummary, getThreadHistory } = useCanvasContext();
   const { getNodes } = useReactFlow();
   const {
     addResponseGraph,
     addLoadingNode,
     removeLoadingNode,
     setSelectedFrame,
-    canvasId,
-    nodes,
   } = useCanvasStore();
   const { addUserMessage, setStreaming, commitAIMessage, clearStreaming } = useChatStore();
   const { setFirstVisitComplete } = useUIStore();
@@ -31,6 +29,11 @@ export function useAIResponse() {
       if (!question.trim()) return;
       setFirstVisitComplete();
       addUserMessage(question);
+
+      // Read selectedFrameId and nodes fresh from store at submission time.
+      // The vai:follow-up event fires synchronously after setSelectedFrame(),
+      // so the React closure would have a stale value.
+      const { selectedFrameId, nodes, canvasId } = useCanvasStore.getState();
 
       const responseId = generateId();
       const pendingPos = useCanvasStore.getState().pendingExpansionPosition;
@@ -161,9 +164,6 @@ export function useAIResponse() {
       }
     },
     [
-      selectedFrameId,
-      canvasId,
-      nodes,
       getNodes,
       getCanvasSummary,
       getThreadHistory,

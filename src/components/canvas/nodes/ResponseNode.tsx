@@ -1,7 +1,7 @@
 'use client';
 
-import { memo, useState } from 'react';
-import type { NodeProps, Node } from '@xyflow/react';
+import { Fragment, memo, useState } from 'react';
+import { Handle, Position, type NodeProps, type Node } from '@xyflow/react';
 import { useCanvasStore } from '@/store/canvasStore';
 
 export interface ResponseNodeData extends Record<string, unknown> {
@@ -15,6 +15,24 @@ const DOT_POSITIONS: Record<Direction, React.CSSProperties> = {
   right:  { right: -8, top: '50%',  transform: 'translateY(-50%)' },
   bottom: { bottom: -8, left: '50%', transform: 'translateX(-50%)' },
   left:   { left: -8,  top: '50%',  transform: 'translateY(-50%)' },
+};
+
+const HANDLE_POSITION: Record<Direction, Position> = {
+  top:    Position.Top,
+  right:  Position.Right,
+  bottom: Position.Bottom,
+  left:   Position.Left,
+};
+
+const HIDDEN_HANDLE_STYLE: React.CSSProperties = {
+  width: 1,
+  height: 1,
+  minWidth: 0,
+  minHeight: 0,
+  background: 'transparent',
+  border: 'none',
+  opacity: 0,
+  pointerEvents: 'none',
 };
 
 function stopAll(e: React.SyntheticEvent) {
@@ -68,6 +86,31 @@ export const ResponseNode = memo(function ResponseNode({
       onMouseLeave={() => setIsHovered(false)}
       onClick={() => setSelectedFrame(id)}
     >
+      {/* Edge anchor handles — invisible, one source + one target per side.
+          Without these React Flow has nothing to render response→response
+          connections against, so the branch edges never appear. */}
+      {(['top', 'right', 'bottom', 'left'] as Direction[]).map((dir) => {
+        const pos = HANDLE_POSITION[dir];
+        return (
+          <Fragment key={`h-${dir}`}>
+            <Handle
+              type="target"
+              id={`t-${dir}`}
+              position={pos}
+              isConnectable={false}
+              style={HIDDEN_HANDLE_STYLE}
+            />
+            <Handle
+              type="source"
+              id={`s-${dir}`}
+              position={pos}
+              isConnectable={false}
+              style={HIDDEN_HANDLE_STYLE}
+            />
+          </Fragment>
+        );
+      })}
+
       {/* 4 directional expansion dots */}
       {(['top', 'right', 'bottom', 'left'] as Direction[]).map((dir) => (
         <div

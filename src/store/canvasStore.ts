@@ -355,10 +355,29 @@ export const useCanvasStore = create<CanvasStore>()(
 
         // Response-to-response edge (branching)
         if (parentResponseId) {
+          // Pick which sides to connect based on where the child sits
+          // relative to the parent, so the line flows out the nearest edge.
+          const parent = s.nodes.find((n) => n.id === parentResponseId);
+          let sourceHandle = 's-right';
+          let targetHandle = 't-left';
+          if (parent) {
+            const dx = absolutePosition.x - parent.position.x;
+            const dy = absolutePosition.y - parent.position.y;
+            if (Math.abs(dx) >= Math.abs(dy)) {
+              if (dx >= 0) { sourceHandle = 's-right'; targetHandle = 't-left'; }
+              else { sourceHandle = 's-left'; targetHandle = 't-right'; }
+            } else {
+              if (dy >= 0) { sourceHandle = 's-bottom'; targetHandle = 't-top'; }
+              else { sourceHandle = 's-top'; targetHandle = 't-bottom'; }
+            }
+          }
+
           s.edges.push({
             id: generateId(),
             source: parentResponseId,
             target: responseId,
+            sourceHandle,
+            targetHandle,
             type: 'smoothstep',
             animated: true,
             style: { stroke: '#a5b4fc', strokeWidth: 3, strokeDasharray: '10 5' },

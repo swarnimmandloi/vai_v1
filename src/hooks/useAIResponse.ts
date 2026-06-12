@@ -157,7 +157,7 @@ export function useAIResponse() {
 
         const supabaseConfigured = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
         if (canvasId && canvasId !== 'demo' && supabaseConfigured) {
-          persistFile(responseId, canvasId, clusterOffset, parsed).catch(console.error);
+          persistFile(responseId, canvasId, clusterOffset, parsed, parentResponseId).catch(console.error);
         }
 
         setTimeout(() => {
@@ -227,7 +227,8 @@ async function persistFile(
     sections: KnowledgeSection[];
     cards: KnowledgeCard[];
     connections: Array<{ from: string; to: string; label?: string }>;
-  }
+  },
+  parentResponseId?: string
 ) {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL) return;
 
@@ -244,6 +245,7 @@ async function persistFile(
         sections: parsed.sections ?? [],
         cards: parsed.cards,
         connections: parsed.connections ?? [],
+        parent_response_id: parentResponseId,
       },
     }),
   });

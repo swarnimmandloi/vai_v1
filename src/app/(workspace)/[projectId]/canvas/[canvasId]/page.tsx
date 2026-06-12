@@ -64,7 +64,8 @@ function CanvasPageInner({ canvasId }: { canvasId: string }) {
           connections,
           { x: file.position_x, y: file.position_y },
           responseWidth,
-          responseHeight
+          responseHeight,
+          file.content.parent_response_id
         );
         commitAIMessage(normalized.chat_summary ?? '', file.id);
       }

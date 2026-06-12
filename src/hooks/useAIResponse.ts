@@ -39,9 +39,12 @@ export function useAIResponse() {
       const pendingPos = useCanvasStore.getState().pendingExpansionPosition;
       if (pendingPos) useCanvasStore.getState().setPendingExpansionPosition(null);
       const rawOffset = pendingPos ?? getMeasuredNextPosition(getNodes());
+      // Use store nodes (always in sync) rather than getNodes() for collision check
+      const storeNodes = useCanvasStore.getState().nodes;
       const clusterOffset = pendingPos?.direction
-        ? findFreePosition(rawOffset, pendingPos.direction, getNodes())
+        ? findFreePosition(rawOffset, pendingPos.direction, storeNodes)
         : rawOffset;
+      console.log('[VAI] branch placement — pendingPos:', pendingPos, '→ clusterOffset:', clusterOffset);
       const tempId = `loading-${generateId()}`;
       addLoadingNode(tempId, clusterOffset);
       setStreaming(true, tempId);

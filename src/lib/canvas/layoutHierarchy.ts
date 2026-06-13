@@ -192,17 +192,25 @@ export function layoutHierarchy(
   connections.forEach(({ from, to }) => {
     const fromSec = cards.find((c) => c.id === from)?.section;
     const toSec = cards.find((c) => c.id === to)?.section;
-    if (
-      fromSec &&
-      toSec &&
-      fromSec !== toSec &&
-      sectionIdSet.has(fromSec) &&
-      sectionIdSet.has(toSec)
-    ) {
+    // Section → section
+    if (fromSec && toSec && fromSec !== toSec && sectionIdSet.has(fromSec) && sectionIdSet.has(toSec)) {
       const key = `${fromSec}->${toSec}`;
-      if (!addedEdges.has(key)) {
-        addedEdges.add(key);
-        topG.setEdge(fromSec, toSec);
+      if (!addedEdges.has(key)) { addedEdges.add(key); topG.setEdge(fromSec, toSec); }
+    }
+    // Section → ungrouped block (e.g. action card expanding into new unsectioned cards)
+    if (ungroupedCards.length > 0 && fromSec && sectionIdSet.has(fromSec) && !toSec) {
+      const toIsUngrouped = ungroupedCards.some((c) => c.id === to);
+      if (toIsUngrouped) {
+        const key = `${fromSec}->${UNGROUPED_ID}`;
+        if (!addedEdges.has(key)) { addedEdges.add(key); topG.setEdge(fromSec, UNGROUPED_ID); }
+      }
+    }
+    // Ungrouped block → section
+    if (ungroupedCards.length > 0 && !fromSec && toSec && sectionIdSet.has(toSec)) {
+      const fromIsUngrouped = ungroupedCards.some((c) => c.id === from);
+      if (fromIsUngrouped) {
+        const key = `${UNGROUPED_ID}->${toSec}`;
+        if (!addedEdges.has(key)) { addedEdges.add(key); topG.setEdge(UNGROUPED_ID, toSec); }
       }
     }
   });

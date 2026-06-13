@@ -8,6 +8,7 @@ import {
   type NodeChange,
   type EdgeChange,
   type Connection,
+  MarkerType,
   applyNodeChanges,
   applyEdgeChanges,
   addEdge,
@@ -439,14 +440,21 @@ export const useCanvasStore = create<CanvasStore>()(
         });
 
         newEdges.forEach(({ from, to, label }) => {
+          const sourceCard = (s.nodes.find((n) => n.id === from) as CardNode | undefined)?.data?.card;
+          const isActionEdge = sourceCard?.type === 'action';
           s.edges.push({
             id: generateId(),
             source: from,
             target: to,
             type: 'smoothstep',
-            animated: false,
+            animated: isActionEdge,
             label: label ?? undefined,
-            style: { stroke: '#6366f1', strokeWidth: 1.5 },
+            style: {
+              stroke: isActionEdge ? '#14b8a6' : '#6366f1',
+              strokeWidth: isActionEdge ? 2 : 1.5,
+              strokeDasharray: isActionEdge ? undefined : undefined,
+            },
+            markerEnd: isActionEdge ? { type: MarkerType.ArrowClosed, color: '#14b8a6', width: 16, height: 16 } : undefined,
             labelStyle: { fill: '#94a3b8', fontSize: 10, fontWeight: 500 },
             labelBgStyle: { fill: '#0f172a', fillOpacity: 0.9 },
             labelBgPadding: [4, 6] as [number, number],

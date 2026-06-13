@@ -6,7 +6,8 @@ import { useCanvasStore } from '@/store/canvasStore';
 import { useChatStore } from '@/store/chatStore';
 import { useUIStore } from '@/store/uiStore';
 import { useCanvasContext } from './useCanvasContext';
-import type { KnowledgeCard, KnowledgeSection } from '@/types/canvas';
+import type { KnowledgeCard, KnowledgeSection, ResponseFormat } from '@/types/canvas';
+import type { AIFormattedResponse } from '@/types/ai';
 import { generateId } from '@/lib/utils';
 import { layoutHierarchy, prefixResponseIds } from '@/lib/canvas/layoutHierarchy';
 import { saveRecentCanvas } from '@/lib/recentCanvases';
@@ -17,6 +18,7 @@ export function useAIResponse() {
   const { getNodes } = useReactFlow();
   const {
     addResponseGraph,
+    addMarkdownResponse,
     addLoadingNode,
     removeLoadingNode,
     setSelectedFrame,
@@ -38,14 +40,15 @@ export function useAIResponse() {
       const responseId = generateId();
 
       // Resolve parentResponseId first — position depends on it.
+      // A "frame" is any top-level answer node: mind-map response or markdown doc.
       let parentResponseId: string | undefined;
       if (selectedFrameId) {
         const sel = nodes.find((n) => n.id === selectedFrameId);
-        if (sel?.type === 'response') {
+        if (sel && isFrameNode(sel)) {
           parentResponseId = selectedFrameId;
         } else if (sel?.parentId) {
           const parent = nodes.find((n) => n.id === sel.parentId);
-          if (parent?.type === 'response') {
+          if (parent && isFrameNode(parent)) {
             parentResponseId = parent.id;
           } else if (parent?.parentId) {
             parentResponseId = parent.parentId;
@@ -53,18 +56,24 @@ export function useAIResponse() {
         }
       }
       if (!parentResponseId) {
-        const responseNodes = nodes.filter((n) => n.type === 'response');
-        if (responseNodes.length > 0) {
-          parentResponseId = responseNodes[responseNodes.length - 1].id;
+        const frameNodes = nodes.filter(isFrameNode);
+        if (frameNodes.length > 0) {
+          parentResponseId = frameNodes[frameNodes.length - 1].id;
         }
       }
+
+      const parentFormat: ResponseFormat | null = parentResponseId
+        ? nodes.find((n) => n.id === parentResponseId)?.type === 'markdown'
+          ? 'markdown'
+          : 'mindmap'
+        : null;
 
       // Determine placement position.
       // Priority: explicit dot position → branch-adjacent-to-parent → tail of chain.
       const pendingPos = useCanvasStore.getState().pendingExpansionPosition;
       if (pendingPos) useCanvasStore.getState().setPendingExpansionPosition(null);
 
-      const allResponseNodes = nodes.filter((n) => n.type === 'response');
+      const allResponseNodes = nodes.filter(isFrameNode);
       const parentIsChainTail = !parentResponseId || allResponseNodes.at(-1)?.id === parentResponseId;
 
       let clusterOffset: { x: number; y: number };
@@ -113,6 +122,7 @@ export function useAIResponse() {
             threadHistory,
             selectedFrameId,
             selectedFrameTitle: selectedCardHeading,
+            parentFormat,
           }),
         });
 
@@ -129,23 +139,63 @@ export function useAIResponse() {
           }
         }
 
-        const parsed = JSON.parse(fullText) as {
-          chat_summary: string;
-          topic: string;
-          sections: KnowledgeSection[];
-          cards: KnowledgeCard[];
-          connections: Array<{ from: string; to: string; label?: string }>;
+        const parsed = JSON.parse(fullText) as AIFormattedResponse;
+        const format: ResponseFormat = parsed.format ?? 'mindmap';
+        const supabaseConfigured = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
+        const shouldPersist = !!canvasId && canvasId !== 'demo' && supabaseConfigured;
+
+        // CHAT — reply in the chat panel only, no canvas frame.
+        if (format === 'chat') {
+          removeLoadingNode(tempId);
+          clearStreaming();
+          commitAIMessage(parsed.chat_summary ?? '', '');
+          return;
+        }
+
+        // MARKDOWN — a single self-sizing document frame.
+        if (format === 'markdown') {
+          removeLoadingNode(tempId);
+          const topic = parsed.topic ?? 'Response';
+          const markdown = parsed.markdown ?? '';
+          addMarkdownResponse(responseId, topic, markdown, clusterOffset, 560, parentResponseId);
+
+          setSelectedFrame(responseId);
+          commitAIMessage(parsed.chat_summary ?? '', responseId);
+
+          if (shouldPersist) {
+            persistMarkdownFile(responseId, canvasId!, clusterOffset, {
+              topic,
+              chat_summary: parsed.chat_summary ?? '',
+              markdown,
+            }, parentResponseId).catch(console.error);
+          }
+
+          setTimeout(() => {
+            window.dispatchEvent(
+              new CustomEvent('vai:focus-frame', { detail: { frameId: responseId } })
+            );
+          }, 100);
+          return;
+        }
+
+        // MINDMAP (default) — the section/card knowledge graph.
+        const mindmap = {
+          chat_summary: parsed.chat_summary ?? '',
+          topic: parsed.topic ?? 'Response',
+          sections: parsed.sections ?? [],
+          cards: parsed.cards ?? [],
+          connections: parsed.connections ?? [],
         };
 
         console.log(
-          '[VAI] Response — cards:', parsed.cards?.length,
-          '| sections:', parsed.sections?.length ?? 0,
-          '| connections:', parsed.connections?.length
+          '[VAI] Response — cards:', mindmap.cards.length,
+          '| sections:', mindmap.sections.length,
+          '| connections:', mindmap.connections.length
         );
 
         const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
         const { sections: pfxSections, cards: pfxCards, connections: pfxConnections } =
-          prefixResponseIds(responseId, parsed.sections ?? [], parsed.cards, parsed.connections ?? []);
+          prefixResponseIds(responseId, mindmap.sections, mindmap.cards, mindmap.connections);
         const { positionedSections, positionedCards, responseWidth, responseHeight } =
           layoutHierarchy(responseId, pfxSections, pfxCards, pfxConnections, undefined, isMobile ? 'TB' : 'LR');
 
@@ -153,7 +203,7 @@ export function useAIResponse() {
 
         addResponseGraph(
           responseId,
-          parsed.topic ?? 'Response',
+          mindmap.topic,
           positionedSections,
           positionedCards,
           pfxConnections,
@@ -164,8 +214,8 @@ export function useAIResponse() {
         );
 
         setSelectedFrame(responseId);
-        commitAIMessage(parsed.chat_summary, responseId);
-        saveRecentCanvas(question, parsed);
+        commitAIMessage(mindmap.chat_summary, responseId);
+        saveRecentCanvas(question, mindmap);
 
         // Dev only: persist to canvas/[slug].json so it survives reloads + shows in Recent
         if (process.env.NODE_ENV === 'development') {
@@ -173,15 +223,14 @@ export function useAIResponse() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              filename: `${slugify(parsed.topic)}.json`,
-              content: { ...parsed, question, position: clusterOffset },
+              filename: `${slugify(mindmap.topic)}.json`,
+              content: { ...mindmap, format: 'mindmap', question, position: clusterOffset },
             }),
           }).catch(console.error);
         }
 
-        const supabaseConfigured = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
-        if (canvasId && canvasId !== 'demo' && supabaseConfigured) {
-          persistFile(responseId, canvasId, clusterOffset, parsed, parentResponseId).catch(console.error);
+        if (shouldPersist) {
+          persistFile(responseId, canvasId!, clusterOffset, mindmap, parentResponseId).catch(console.error);
         }
 
         setTimeout(() => {
@@ -205,6 +254,7 @@ export function useAIResponse() {
       commitAIMessage,
       clearStreaming,
       addResponseGraph,
+      addMarkdownResponse,
       addLoadingNode,
       removeLoadingNode,
       setSelectedFrame,
@@ -217,13 +267,19 @@ export function useAIResponse() {
 
 import type { Node } from '@xyflow/react';
 
+// A "frame" is any top-level answer node — mind-map response or markdown doc.
+// Both participate in placement, collision, and branching.
+function isFrameNode(n: Node): boolean {
+  return n.type === 'response' || n.type === 'markdown';
+}
+
 function findFreePosition(
   ideal: { x: number; y: number },
   direction: string,
   allNodes: Node[]
 ): { x: number; y: number } {
   const W = 700, H = 500, PAD = 100;
-  const responseNodes = allNodes.filter((n) => n.type === 'response');
+  const responseNodes = allNodes.filter(isFrameNode);
 
   function overlaps(pos: { x: number; y: number }): boolean {
     return responseNodes.some((n) => {
@@ -265,7 +321,7 @@ function findFreePosition(
 function getMeasuredNextPosition(allNodes: Node[]): { x: number; y: number } {
   const GAP = 200;
   const DEFAULT_WIDTH = 700;
-  const responseNodes = allNodes.filter((n) => n.type === 'response');
+  const responseNodes = allNodes.filter(isFrameNode);
 
   if (responseNodes.length === 0) return { x: 100, y: 100 };
 
@@ -304,6 +360,7 @@ async function persistFile(
       canvasId,
       position,
       content: {
+        format: 'mindmap',
         topic: parsed.topic,
         chat_summary: parsed.chat_summary,
         sections: parsed.sections ?? [],
@@ -317,5 +374,37 @@ async function persistFile(
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     console.error('[VAI] persistFile failed:', err);
+  }
+}
+
+async function persistMarkdownFile(
+  responseId: string,
+  canvasId: string,
+  position: { x: number; y: number },
+  parsed: { topic: string; chat_summary: string; markdown: string },
+  parentResponseId?: string
+) {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) return;
+
+  const res = await fetch('/api/files', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      id: responseId,
+      canvasId,
+      position,
+      content: {
+        format: 'markdown',
+        topic: parsed.topic,
+        chat_summary: parsed.chat_summary,
+        markdown: parsed.markdown,
+        parent_response_id: parentResponseId,
+      },
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    console.error('[VAI] persistMarkdownFile failed:', err);
   }
 }

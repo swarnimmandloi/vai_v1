@@ -12,6 +12,11 @@ export type KnowledgeCard = {
 
 export type SectionColor = 'blue' | 'green' | 'purple' | 'orange' | 'teal' | 'red';
 
+// Response format chosen by the AI's classification layer.
+// 'chat' = chat-panel only (no canvas frame); 'markdown' = single-column
+// document frame; 'mindmap' = the section/card knowledge graph.
+export type ResponseFormat = 'chat' | 'markdown' | 'mindmap';
+
 export interface KnowledgeSection {
   id: string;
   label: string;

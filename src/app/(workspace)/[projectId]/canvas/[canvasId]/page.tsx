@@ -20,7 +20,7 @@ interface PageProps {
 
 function CanvasPageInner({ canvasId }: { canvasId: string }) {
   const { hasSubmittedFirstQuestion, setFirstVisitComplete } = useUIStore();
-  const { addResponseGraph, clearCanvas } = useCanvasStore();
+  const { addResponseGraph, addMarkdownResponse, clearCanvas } = useCanvasStore();
   const { commitAIMessage } = useChatStore();
   const { submit } = useAIResponse();
   const [loaded, setLoaded] = useState(false);
@@ -51,6 +51,20 @@ function CanvasPageInner({ canvasId }: { canvasId: string }) {
     if (files && files.length > 0) {
       const isMobile = window.innerWidth < 768;
       for (const file of files) {
+        // Markdown documents reload as a single self-sizing frame.
+        if (file.content?.format === 'markdown') {
+          addMarkdownResponse(
+            file.id,
+            String(file.content.topic ?? 'Response'),
+            String(file.content.markdown ?? ''),
+            { x: file.position_x, y: file.position_y },
+            560,
+            file.content.parent_response_id
+          );
+          commitAIMessage(String(file.content.chat_summary ?? ''), file.id);
+          continue;
+        }
+
         const normalized = normalizeCardGraph(file.content);
         const { sections, cards, connections } =
           prefixResponseIds(file.id, normalized.sections, normalized.cards, normalized.connections ?? []);

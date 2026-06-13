@@ -40,10 +40,21 @@ export function normalizeCardGraph(data: Record<string, unknown>) {
     .filter(({ from, to }) => cardIds.has(from) && cardIds.has(to));
 
   return {
+    format: 'mindmap' as const,
     chat_summary: String(data.chat_summary ?? ''),
     topic,
     sections,
     cards,
     connections,
+  };
+}
+
+export function normalizeMarkdownResponse(data: Record<string, unknown>) {
+  const topic = String(data.topic ?? data.title ?? data.heading ?? 'Response');
+  return {
+    format: 'markdown' as const,
+    chat_summary: String(data.chat_summary ?? ''),
+    topic,
+    markdown: String(data.markdown ?? data.content ?? data.body ?? ''),
   };
 }

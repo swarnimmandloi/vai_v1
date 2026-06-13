@@ -20,6 +20,7 @@ import { FrameLoadingNode } from './nodes/FrameLoadingNode';
 import { CardNode } from './nodes/CardNode';
 import { SectionNode } from './nodes/SectionNode';
 import { ResponseNode } from './nodes/ResponseNode';
+import { MarkdownNode } from './nodes/MarkdownNode';
 import type { CardNodeData, SectionNodeData, ResponseNodeData } from '@/store/canvasStore';
 import { layoutHierarchy } from '@/lib/canvas/layoutHierarchy';
 import { CardExpansionOverlay } from './CardExpansionOverlay';
@@ -31,6 +32,7 @@ const nodeTypes: NodeTypes = {
   card: CardNode as NodeTypes['card'],
   section: SectionNode as NodeTypes['section'],
   response: ResponseNode as NodeTypes['response'],
+  markdown: MarkdownNode as NodeTypes['markdown'],
 };
 
 interface CanvasViewProps {

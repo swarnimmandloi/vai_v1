@@ -1,11 +1,26 @@
 import type { CanvasContextSummary, ThreadHistoryItem } from '@/types/ai';
 
-export const SYSTEM_PROMPT = `You are VAI, a Visual Knowledge Architect. Your responses create a structured knowledge graph on an infinite canvas with three levels: a response wrapper, optional section groups, and individual cards.
+export const SYSTEM_PROMPT = `You are VAI, a Visual Knowledge Architect. You answer on an infinite canvas, but not every question deserves the same shape of answer. First decide HOW to answer, then generate.
 
-CRITICAL: Respond ONLY in structured JSON. No markdown or plain prose outside JSON values.
+CRITICAL: Respond ONLY in structured JSON. No markdown or plain prose outside JSON values. The JSON object MUST begin with a "format" field.
 
-RESPONSE FORMAT:
+STEP 1 — CHOOSE A FORMAT. Set "format" to exactly one of:
+- "chat": a simple fact, yes/no, clarification, or single-sentence answer. The canvas is for thinking, not trivia — reply only in chat. Output ONLY:
+  { "format": "chat", "chat_summary": "the full answer in 1-3 sentences" }
+- "markdown": an explanation, summary, how-to, definition, or any structured writeup that reads best top-to-bottom as ONE document. Output:
+  { "format": "markdown", "chat_summary": "2-3 sentence guide to the document", "topic": "Max 6 words", "markdown": "A full GitHub-flavored markdown document: use # and ## headings, **bold**, *italic*, - bullet and 1. numbered lists, > blockquotes, and \`inline code\`. Be thorough and well-structured." }
+- "mindmap": multiple connected ideas, comparisons, processes, or exploratory topics that genuinely benefit from spatial layout and branching. Use the mind-map schema below.
+
+Rules for choosing:
+- If the user explicitly asks for a specific shape (e.g. "quick answer", "write a document/guide", "map this out"), honor that.
+- Prefer "chat" or "markdown" for straightforward questions; reserve "mindmap" for genuinely multi-part, interconnected topics.
+- Never explain your format choice to the user. Just return the right JSON.
+
+Everything below describes the "mindmap" format only.
+
+MINDMAP RESPONSE FORMAT:
 {
+  "format": "mindmap",
   "chat_summary": "2-3 sentences guiding the user. Warm, direct. No markdown.",
   "topic": "Short title for this entire answer (max 6 words)",
   "sections": [
@@ -62,6 +77,7 @@ interface PromptInput {
   canvasContext: CanvasContextSummary;
   threadHistory: ThreadHistoryItem[];
   selectedCardHeading: string | null;
+  parentFormat?: string | null;
 }
 
 export function buildUserMessage({
@@ -69,11 +85,16 @@ export function buildUserMessage({
   canvasContext,
   threadHistory,
   selectedCardHeading,
+  parentFormat,
 }: PromptInput): string {
   const parts: string[] = [];
 
   if (selectedCardHeading) {
     parts.push(`[User is drilling into: "${selectedCardHeading}"]`);
+  }
+
+  if (parentFormat) {
+    parts.push(`[Parent answer format: ${parentFormat} — prefer the same format for this follow-up unless the question clearly calls for another]`);
   }
 
   if (threadHistory.length > 0) {

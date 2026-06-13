@@ -16,6 +16,41 @@ import {
 import type { Frame, Block, BlockContent, KnowledgeCard, KnowledgeSection } from '@/types/canvas';
 import { generateId } from '@/lib/utils';
 
+// Build the neutral response→response branch edge, picking which sides to
+// connect based on where the child sits relative to its parent so the line
+// flows out the nearest edge. Shared by mind-map and markdown frames.
+function buildBranchEdge(
+  parentResponseId: string,
+  childId: string,
+  childPosition: { x: number; y: number },
+  parentPosition?: { x: number; y: number }
+): Edge {
+  let sourceHandle = 's-right';
+  let targetHandle = 't-left';
+  if (parentPosition) {
+    const dx = childPosition.x - parentPosition.x;
+    const dy = childPosition.y - parentPosition.y;
+    if (Math.abs(dx) >= Math.abs(dy)) {
+      if (dx >= 0) { sourceHandle = 's-right'; targetHandle = 't-left'; }
+      else { sourceHandle = 's-left'; targetHandle = 't-right'; }
+    } else {
+      if (dy >= 0) { sourceHandle = 's-bottom'; targetHandle = 't-top'; }
+      else { sourceHandle = 's-top'; targetHandle = 't-bottom'; }
+    }
+  }
+  return {
+    id: generateId(),
+    source: parentResponseId,
+    target: childId,
+    sourceHandle,
+    targetHandle,
+    type: 'default',
+    animated: false,
+    style: { stroke: '#94a3b8', strokeWidth: 2.5 },
+    zIndex: 5,
+  };
+}
+
 export interface FrameNodeData extends Record<string, unknown> {
   frame: Frame;
 }
@@ -32,10 +67,16 @@ export interface ResponseNodeData extends Record<string, unknown> {
   topic: string;
 }
 
+export interface MarkdownNodeData extends Record<string, unknown> {
+  topic: string;
+  markdown: string;
+}
+
 export type FrameNode = Node<FrameNodeData, 'frame'>;
 export type CardNode = Node<CardNodeData, 'card'>;
 export type SectionNode = Node<SectionNodeData, 'section'>;
 export type ResponseNode = Node<ResponseNodeData, 'response'>;
+export type MarkdownNode = Node<MarkdownNodeData, 'markdown'>;
 export type LoadingNode = Node<Record<string, unknown>, 'loading'>;
 
 interface CanvasStore {
@@ -87,6 +128,15 @@ interface CanvasStore {
     absolutePosition: { x: number; y: number },
     responseWidth: number,
     responseHeight: number,
+    parentResponseId?: string
+  ) => void;
+
+  addMarkdownResponse: (
+    responseId: string,
+    topic: string,
+    markdown: string,
+    absolutePosition: { x: number; y: number },
+    width: number,
     parentResponseId?: string
   ) => void;
 
@@ -356,36 +406,31 @@ export const useCanvasStore = create<CanvasStore>()(
 
         // Response-to-response edge (branching)
         if (parentResponseId) {
-          // Pick which sides to connect based on where the child sits
-          // relative to the parent, so the line flows out the nearest edge.
           const parent = s.nodes.find((n) => n.id === parentResponseId);
-          let sourceHandle = 's-right';
-          let targetHandle = 't-left';
-          if (parent) {
-            const dx = absolutePosition.x - parent.position.x;
-            const dy = absolutePosition.y - parent.position.y;
-            if (Math.abs(dx) >= Math.abs(dy)) {
-              if (dx >= 0) { sourceHandle = 's-right'; targetHandle = 't-left'; }
-              else { sourceHandle = 's-left'; targetHandle = 't-right'; }
-            } else {
-              if (dy >= 0) { sourceHandle = 's-bottom'; targetHandle = 't-top'; }
-              else { sourceHandle = 's-top'; targetHandle = 't-bottom'; }
-            }
-          }
+          s.edges.push(
+            buildBranchEdge(parentResponseId, responseId, absolutePosition, parent?.position)
+          );
+        }
+      }),
 
-          // Smooth bezier curve matching the Figma design — a calm, solid,
-          // neutral line that shows one mind map flowing into the next.
-          s.edges.push({
-            id: generateId(),
-            source: parentResponseId,
-            target: responseId,
-            sourceHandle,
-            targetHandle,
-            type: 'default',
-            animated: false,
-            style: { stroke: '#94a3b8', strokeWidth: 2.5 },
-            zIndex: 5,
-          });
+    addMarkdownResponse: (responseId, topic, markdown, absolutePosition, width, parentResponseId) =>
+      set((s) => {
+        // A markdown frame is a single self-sizing node — no sections/cards,
+        // no dagre. Height is measured by React Flow from intrinsic content.
+        s.nodes.push({
+          id: responseId,
+          type: 'markdown',
+          position: absolutePosition,
+          data: { topic, markdown },
+          style: { width },
+          zIndex: 0,
+        } as MarkdownNode);
+
+        if (parentResponseId) {
+          const parent = s.nodes.find((n) => n.id === parentResponseId);
+          s.edges.push(
+            buildBranchEdge(parentResponseId, responseId, absolutePosition, parent?.position)
+          );
         }
       }),
 

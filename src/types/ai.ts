@@ -1,4 +1,4 @@
-import type { LayoutType, BlockType, ChartContent, ListContent } from './canvas';
+import type { LayoutType, BlockType, ChartContent, ListContent, ResponseFormat, KnowledgeSection, KnowledgeCard } from './canvas';
 
 export interface AIBlockResponse {
   block_type: BlockType;
@@ -14,6 +14,20 @@ export interface AIFrameResponse {
 export interface AIResponse {
   chat_summary: string;
   frame: AIFrameResponse;
+}
+
+// The shape returned by /api/ai/respond, discriminated by `format`.
+// All variants carry `chat_summary`; the rest depends on the chosen format.
+export interface AIFormattedResponse {
+  format: ResponseFormat;
+  chat_summary: string;
+  topic?: string;
+  // markdown format
+  markdown?: string;
+  // mindmap format
+  sections?: KnowledgeSection[];
+  cards?: KnowledgeCard[];
+  connections?: Array<{ from: string; to: string; label?: string }>;
 }
 
 export interface CanvasContextSummary {
@@ -34,6 +48,7 @@ export interface AIRequestPayload {
   threadHistory: ThreadHistoryItem[];
   selectedFrameId: string | null;
   selectedFrameTitle: string | null;
+  parentFormat?: ResponseFormat | null;
   canvasSnapshot?: string;
 }
 

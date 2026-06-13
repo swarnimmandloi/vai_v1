@@ -36,6 +36,17 @@ export function ChatInput({ onSubmit, isLoading, disabled }: ChatInputProps) {
     return () => window.removeEventListener('vai:branch', handleBranch);
   }, []);
 
+  // Listen for section-level ask requests from MarkdownNode section cards
+  useEffect(() => {
+    function handleSectionAsk(e: Event) {
+      const { hint } = (e as CustomEvent).detail;
+      setValue(hint);
+      textareaRef.current?.focus();
+    }
+    window.addEventListener('vai:section-ask', handleSectionAsk);
+    return () => window.removeEventListener('vai:section-ask', handleSectionAsk);
+  }, []);
+
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();

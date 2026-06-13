@@ -89,6 +89,113 @@ const MD_COMPONENTS = {
   hr: () => <hr style={{ border: 'none', borderTop: '1px solid var(--border)', margin: '14px 0' }} />,
 };
 
+// Parse markdown into sections split on ## headings.
+// Content before the first ## becomes a null-heading intro block.
+function parseMarkdownSections(markdown: string): Array<{ heading: string | null; content: string }> {
+  const parts = markdown.split(/(?=^## )/m);
+  return parts
+    .map((part) => {
+      const match = part.match(/^## (.+)\n?/);
+      if (match) {
+        return {
+          heading: match[1].trim(),
+          content: part.replace(/^## .+\n?/, '').trim(),
+        };
+      }
+      return { heading: null, content: part.trim() };
+    })
+    .filter((s) => s.heading !== null || s.content !== '');
+}
+
+// A single interactive section card within the markdown frame.
+function SectionCard({
+  heading,
+  content,
+  isLast,
+  onAsk,
+}: {
+  heading: string | null;
+  content: string;
+  isLast: boolean;
+  onAsk: (heading: string) => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+
+  return (
+    <div
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        position: 'relative',
+        padding: '14px 16px',
+        borderBottom: isLast ? 'none' : '1px solid rgba(99,102,241,0.1)',
+        background: hovered && heading ? 'rgba(99,102,241,0.05)' : 'transparent',
+        transition: 'background 0.15s',
+        borderRadius: isLast ? '0 0 14px 14px' : 0,
+      }}
+    >
+      {heading && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            justifyContent: 'space-between',
+            gap: 8,
+            marginBottom: content ? 10 : 0,
+          }}
+        >
+          <span
+            style={{
+              fontSize: 13.5,
+              fontWeight: 650,
+              color: 'var(--foreground)',
+              lineHeight: 1.35,
+              flex: 1,
+            }}
+          >
+            {heading}
+          </span>
+          {/* Per-section ask button — shown on hover */}
+          <div
+            onMouseDown={stopAll}
+            onPointerDown={stopAll}
+            onClick={(e) => {
+              e.stopPropagation();
+              onAsk(heading);
+            }}
+            title={`Ask about "${heading}"`}
+            style={{
+              flexShrink: 0,
+              width: 20,
+              height: 20,
+              borderRadius: 5,
+              background: 'rgba(99,102,241,0.22)',
+              border: '1px solid rgba(99,102,241,0.3)',
+              cursor: 'pointer',
+              display: hovered ? 'flex' : 'none',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#818cf8',
+              fontSize: 14,
+              lineHeight: 1,
+              userSelect: 'none',
+            }}
+          >
+            +
+          </div>
+        </div>
+      )}
+      {content && (
+        <div style={{ fontSize: 13, color: 'var(--muted-fg)' }}>
+          <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>
+            {content}
+          </ReactMarkdown>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export const MarkdownNode = memo(function MarkdownNode({
   data,
   id,
@@ -97,6 +204,8 @@ export const MarkdownNode = memo(function MarkdownNode({
   const { topic, markdown } = data;
   const [isHovered, setIsHovered] = useState(false);
   const setSelectedFrame = useCanvasStore((s) => s.setSelectedFrame);
+
+  const sections = parseMarkdownSections(markdown);
 
   function handleDotClick(e: React.MouseEvent, direction: Direction) {
     e.stopPropagation();
@@ -126,6 +235,13 @@ export const MarkdownNode = memo(function MarkdownNode({
     e.preventDefault();
     setSelectedFrame(id);
     useCanvasStore.getState().setPendingResponseDot({ responseId: id, direction: 'top' });
+  }
+
+  function handleSectionAsk(heading: string) {
+    setSelectedFrame(id);
+    window.dispatchEvent(
+      new CustomEvent('vai:section-ask', { detail: { frameId: id, hint: heading } })
+    );
   }
 
   return (
@@ -187,7 +303,7 @@ export const MarkdownNode = memo(function MarkdownNode({
           transition: 'border-color 0.15s, box-shadow 0.15s',
         }}
       >
-        {/* Header: topic label + ask button */}
+        {/* Header: topic label + whole-frame ask button */}
         <div
           style={{
             padding: '10px 12px 10px 16px',
@@ -229,14 +345,17 @@ export const MarkdownNode = memo(function MarkdownNode({
           </div>
         </div>
 
-        {/* Document body */}
-        <div
-          className="markdown-body"
-          style={{ padding: '18px 22px 22px', fontSize: 13.5, color: 'var(--muted-fg)' }}
-        >
-          <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>
-            {markdown}
-          </ReactMarkdown>
+        {/* Sectioned document body */}
+        <div className="markdown-body">
+          {sections.map((section, i) => (
+            <SectionCard
+              key={i}
+              heading={section.heading}
+              content={section.content}
+              isLast={i === sections.length - 1}
+              onAsk={handleSectionAsk}
+            />
+          ))}
         </div>
       </div>
     </div>

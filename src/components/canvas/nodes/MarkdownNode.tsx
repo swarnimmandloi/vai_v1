@@ -112,14 +112,38 @@ function SectionCard({
   heading,
   content,
   isLast,
-  onAsk,
+  frameId,
 }: {
   heading: string | null;
   content: string;
   isLast: boolean;
-  onAsk: (heading: string) => void;
+  frameId: string;
 }) {
   const [hovered, setHovered] = useState(false);
+  const [askOpen, setAskOpen] = useState(false);
+  const [askText, setAskText] = useState('');
+
+  function handlePlusClick(e: React.MouseEvent) {
+    e.stopPropagation();
+    e.preventDefault();
+    useCanvasStore.getState().setSelectedFrame(frameId);
+    setAskOpen(true);
+    setAskText('');
+  }
+
+  function handleAskSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    const question = askText.trim() || heading || '';
+    if (!question) return;
+    setAskOpen(false);
+    setAskText('');
+    window.dispatchEvent(new CustomEvent('vai:follow-up', { detail: { question } }));
+  }
+
+  function handleAskKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'Escape') { e.stopPropagation(); setAskOpen(false); }
+  }
 
   return (
     <div
@@ -129,7 +153,7 @@ function SectionCard({
         position: 'relative',
         padding: '14px 16px',
         borderBottom: isLast ? 'none' : '1px solid rgba(99,102,241,0.1)',
-        background: hovered && heading ? 'rgba(99,102,241,0.05)' : 'transparent',
+        background: (hovered || askOpen) && heading ? 'rgba(99,102,241,0.05)' : 'transparent',
         transition: 'background 0.15s',
         borderRadius: isLast ? '0 0 14px 14px' : 0,
       }}
@@ -159,10 +183,7 @@ function SectionCard({
           <div
             onMouseDown={stopAll}
             onPointerDown={stopAll}
-            onClick={(e) => {
-              e.stopPropagation();
-              onAsk(heading);
-            }}
+            onClick={handlePlusClick}
             title={`Ask about "${heading}"`}
             style={{
               flexShrink: 0,
@@ -172,7 +193,7 @@ function SectionCard({
               background: 'rgba(99,102,241,0.22)',
               border: '1px solid rgba(99,102,241,0.3)',
               cursor: 'pointer',
-              display: hovered ? 'flex' : 'none',
+              display: hovered || askOpen ? 'flex' : 'none',
               alignItems: 'center',
               justifyContent: 'center',
               color: '#818cf8',
@@ -185,6 +206,56 @@ function SectionCard({
           </div>
         </div>
       )}
+
+      {/* Inline ask input — appears right under the heading when + is clicked */}
+      {askOpen && (
+        <form
+          onSubmit={handleAskSubmit}
+          onMouseDown={stopAll}
+          onPointerDown={stopAll}
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            display: 'flex',
+            gap: 6,
+            marginBottom: content ? 10 : 0,
+          }}
+        >
+          <input
+            autoFocus
+            value={askText}
+            onChange={(e) => setAskText(e.target.value)}
+            onKeyDown={handleAskKeyDown}
+            placeholder={`Ask about "${heading}"…`}
+            style={{
+              flex: 1,
+              background: 'rgba(99,102,241,0.1)',
+              border: '1px solid rgba(99,102,241,0.35)',
+              borderRadius: 7,
+              padding: '5px 9px',
+              fontSize: 12,
+              color: 'var(--foreground)',
+              outline: 'none',
+            }}
+          />
+          <button
+            type="submit"
+            style={{
+              flexShrink: 0,
+              padding: '5px 10px',
+              borderRadius: 7,
+              background: askText.trim() ? '#6366f1' : 'rgba(99,102,241,0.25)',
+              border: 'none',
+              color: '#fff',
+              fontSize: 12,
+              cursor: askText.trim() ? 'pointer' : 'default',
+              transition: 'background 0.15s',
+            }}
+          >
+            →
+          </button>
+        </form>
+      )}
+
       {content && (
         <div style={{ fontSize: 13, color: 'var(--muted-fg)' }}>
           <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>
@@ -235,13 +306,6 @@ export const MarkdownNode = memo(function MarkdownNode({
     e.preventDefault();
     setSelectedFrame(id);
     useCanvasStore.getState().setPendingResponseDot({ responseId: id, direction: 'top' });
-  }
-
-  function handleSectionAsk(heading: string) {
-    setSelectedFrame(id);
-    window.dispatchEvent(
-      new CustomEvent('vai:section-ask', { detail: { frameId: id, hint: heading } })
-    );
   }
 
   return (
@@ -353,7 +417,7 @@ export const MarkdownNode = memo(function MarkdownNode({
               heading={section.heading}
               content={section.content}
               isLast={i === sections.length - 1}
-              onAsk={handleSectionAsk}
+              frameId={id}
             />
           ))}
         </div>
